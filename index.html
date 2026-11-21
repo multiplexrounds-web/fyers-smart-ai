@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FYERS SMART AI</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0b1220;color:#fff;font-family:Arial,sans-serif;padding:18px}
+header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
+h1{color:#35d6a0;font-size:24px}
+.status{color:#ffc857}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px;margin-top:22px}
+.card{background:#172338;padding:18px;border-radius:12px;border:1px solid #293b55}
+.label{color:#aab8ca;font-size:13px}
+.value{font-size:22px;margin-top:12px;font-weight:bold}
+.green{color:#35d6a0}
+.red{color:#ff6b6b}
+select{padding:12px;background:#172338;color:white;border:1px solid #40516b;border-radius:8px}
+.note{margin-top:22px;padding:15px;background:#172338;border-radius:10px;color:#ffc857;line-height:1.6}
+</style>
+</head>
+<body>
+<header>
+<div>
+<h1>FYERS SMART AI</h1>
+<p>Read-Only Market Analysis</p>
+</div>
+<select id="timeframe">
+<option>1 Minute</option><option>3 Minutes</option>
+<option>5 Minutes</option><option>10 Minutes</option>
+<option>15 Minutes</option><option>30 Minutes</option>
+<option>1 Hour</option><option>2 Hours</option>
+<option>4 Hours</option><option>Daily</option>
+</select>
+</header>
+
+<div class="grid">
+<div class="card"><div class="label">NIFTY 50</div><div class="value">--</div><div class="label">Waiting for live data</div></div>
+<div class="card"><div class="label">BANK NIFTY</div><div class="value">--</div><div class="label">Waiting for live data</div></div>
+<div class="card"><div class="label">SENSEX</div><div class="value">--</div><div class="label">Waiting for live data</div></div>
+<div class="card"><div class="label">MARKET TREND</div><div class="value">--</div><div class="label">Analysis pending</div></div>
+</div>
+
+<div class="card" style="margin-top:18px">
+<h3>AI Market Analysis</h3>
+<p>Live data connect झाल्यानंतर Bullish / Bearish analysis येथे दिसेल.</p>
+</div>
+
+<div class="note">
+FYERS API: Not Connected<br>
+Dashboard तयार आहे. Live market data जोडणे बाकी आहे.<br>
+Read-only mode: Order execution disabled.
+</div>
+</body>
+</html>
