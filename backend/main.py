@@ -1,14 +1,8 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import os
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
-app = FastAPI(title="FYERS SMART AI")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="FYERS SMART AI - Read Only")
 
 @app.get("/")
 def home():
@@ -23,10 +17,15 @@ def home():
 def health():
     return {"status": "ok"}
 
-@app.get("/market")
-def market():
+@app.get("/fyers/callback")
+def fyers_callback(auth_code: str = None, state: str = None):
+    if not auth_code:
+        return {
+            "message": "FYERS callback endpoint ready",
+            "auth_code_received": False
+        }
     return {
-        "message": "Market data connection pending",
-        "live_data": False,
-        "order_execution": False
+        "message": "Authorization code received",
+        "auth_code_received": True,
+        "note": "Token exchange not configured yet"
     }
