@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "FYERS SMART AI",
+    "slug": "fyers-smart-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "android": {
+      "package": "com.multiplexrounds.fyerssmartai",
+      "versionCode": 1
+    }
+  }
+}
