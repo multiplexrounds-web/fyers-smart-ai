@@ -180,28 +180,30 @@ export default function App(){
   <Row label="Put volume" value={optionFmt(optionSummary.total_put_volume)}/>
   <AppText style={s.settingDesc}>OI, OI change, LTP and volume are read from FYERS. Refreshes every 30 seconds. IV displays only when supplied by FYERS.</AppText>
  </Card>
- <Card title="SMART MONEY & OI DETECTION">
-  <Row label="Call writing / unwinding"/><Row label="Put writing / unwinding"/><Row label="Fresh long positions"/><Row label="Fresh short positions"/><Row label="Unusual OI build-up"/><Row label="Volume spike detection"/><Row label="Institutional activity clues"/>
-  <AppText style={s.settingDesc}>Detection will compare price, OI and volume changes across consecutive live snapshots.</AppText>
+ <Card title="SMART MONEY & OI DETECTION" extra={<AppText style={s.accent}>WAITING FOR LIVE DATA</AppText>}>
+  <Row label="Call writing / unwinding" value="WAITING FOR LIVE DATA"/><Row label="Put writing / unwinding" value="WAITING FOR LIVE DATA"/><Row label="Fresh long positions" value="WAITING FOR LIVE DATA"/><Row label="Fresh short positions" value="WAITING FOR LIVE DATA"/><Row label="Unusual OI build-up" value="WAITING FOR LIVE DATA"/><Row label="Volume spike detection" value="WAITING FOR LIVE DATA"/><Row label="Institutional activity clues" value="WAITING FOR LIVE DATA"/>
+  <AppText style={s.settingDesc}>Signals will appear only after consecutive verified FYERS price, OI and volume snapshots are available.</AppText>
  </Card>
- <Card title="AI TRAP & BREAKOUT DETECTION">
-  <Row label="Bull trap detection"/><Row label="Bear trap detection"/><Row label="Upside breakout probability"/><Row label="Downside breakout probability"/><Row label="Short covering signal"/><Row label="Long unwinding signal"/><Row label="False breakout warning"/>
+ <Card title="AI TRAP & BREAKOUT DETECTION" extra={<AppText style={s.accent}>WAITING FOR LIVE DATA</AppText>}>
+  <Row label="Bull trap detection" value="WAITING FOR LIVE DATA"/><Row label="Bear trap detection" value="WAITING FOR LIVE DATA"/><Row label="Upside breakout probability" value="WAITING FOR LIVE DATA"/><Row label="Downside breakout probability" value="WAITING FOR LIVE DATA"/><Row label="Short covering signal" value="WAITING FOR LIVE DATA"/><Row label="Long unwinding signal" value="WAITING FOR LIVE DATA"/><Row label="False breakout warning" value="WAITING FOR LIVE DATA"/>
+  <AppText style={s.settingDesc}>Trap and breakout analysis requires verified live price, volume and option OI changes.</AppText>
  </Card>
  <Card title="PCR • MAX PAIN • SENTIMENT">
   <View style={s.marketGrid}>{[{a:'PCR',v:optionFmt(optionSummary.pcr,3),b:'Put / Call Ratio'},{a:'MAX PAIN',v:optionFmt(optionSummary.max_pain),b:'Max pain strike'},{a:'PCR STATUS',v:optionPcr===null?'--':'LIVE',b:'Current verified snapshot'},{a:'TOTAL OI',v:optionFmt(optionTotalOI),b:'Call + Put OI'}].map(x=><View key={x.a} style={[s.marketCard,{minHeight:72}]}><AppText style={s.marketName}>{x.a}</AppText><AppText style={[s.marketValue,{fontSize:18}]}>{x.v}</AppText><AppText style={s.marketChange}>{x.b}</AppText></View>)}</View>
   <Row label="Overall option sentiment (PCR-based)" value={optionSentiment}/><Row label="CE / PE dominance (OI)" value={optionDominance}/><Row label="Sentiment change" value="Requires previous live snapshot"/>
   <AppText style={s.settingDesc}>Sentiment is indicative and calculated from verified FYERS open interest. It is not a standalone trading signal.</AppText>
  </Card>
- <Card title="IV & OPTION GREEKS">
-  <Row label="Implied volatility (IV)"/><Row label="IV rank / percentile"/><Row label="Delta"/><Row label="Gamma"/><Row label="Theta"/><Row label="Vega"/><Row label="ATM straddle premium"/>
-  <AppText style={s.settingDesc}>Greeks will be displayed per strike and option side using live prices, IV and time to expiry.</AppText>
+ <Card title="IV & OPTION GREEKS" extra={<AppText style={s.accent}>WAITING FOR LIVE DATA</AppText>}>
+  <Row label="Implied volatility (IV)" value="WAITING FOR LIVE DATA"/><Row label="IV rank / percentile" value="WAITING FOR LIVE DATA"/><Row label="Delta" value="WAITING FOR LIVE DATA"/><Row label="Gamma" value="WAITING FOR LIVE DATA"/><Row label="Theta" value="WAITING FOR LIVE DATA"/><Row label="Vega" value="WAITING FOR LIVE DATA"/><Row label="ATM straddle premium" value="WAITING FOR LIVE DATA"/>
+  <AppText style={s.settingDesc}>IV and Greeks will appear only when verified option prices, implied volatility and expiry data are available.</AppText>
  </Card>
- <Card title="AI SUPPORT & RESISTANCE">
-  <Row label="Strongest CE resistance"/><Row label="Second CE resistance"/><Row label="Strongest PE support"/><Row label="Second PE support"/><Row label="Highest call OI strike"/><Row label="Highest put OI strike"/><Row label="OI wall shift"/>
+ <Card title="AI SUPPORT & RESISTANCE" extra={<AppText style={s.accent}>WAITING FOR LIVE DATA</AppText>}>
+  <Row label="Strongest CE resistance" value="WAITING FOR LIVE DATA"/><Row label="Second CE resistance" value="WAITING FOR LIVE DATA"/><Row label="Strongest PE support" value="WAITING FOR LIVE DATA"/><Row label="Second PE support" value="WAITING FOR LIVE DATA"/><Row label="Highest call OI strike" value="WAITING FOR LIVE DATA"/><Row label="Highest put OI strike" value="WAITING FOR LIVE DATA"/><Row label="OI wall shift" value="WAITING FOR LIVE DATA"/>
+  <AppText style={s.settingDesc}>Support and resistance levels require a valid option chain with current strike-wise call and put OI.</AppText>
  </Card>
- <Card title="AI SIGNAL HISTORY & EXPLANATION">
-  <Row label="Latest detected setup"/><Row label="Signal timestamp"/><Row label="What changed?"/><Row label="Why AI detected it?"/><Row label="Invalidation level"/><Row label="Risk / reward context"/>
-  <AppText style={s.settingDesc}>Every future AI insight will include its data basis, timestamp, confidence and invalidation condition. This is analysis only, not a trade instruction.</AppText>
+ <Card title="AI SIGNAL HISTORY & EXPLANATION" extra={<AppText style={s.accent}>WAITING FOR LIVE DATA</AppText>}>
+  <Row label="Latest detected setup" value="WAITING FOR LIVE DATA"/><Row label="Signal timestamp" value="WAITING FOR LIVE DATA"/><Row label="What changed?" value="WAITING FOR LIVE DATA"/><Row label="Why AI detected it?" value="WAITING FOR LIVE DATA"/><Row label="Invalidation level" value="WAITING FOR LIVE DATA"/><Row label="Risk / reward context" value="WAITING FOR LIVE DATA"/>
+  <AppText style={s.settingDesc}>Signal history will populate only after a verified setup is detected. This is analysis only, not a trade instruction.</AppText>
  </Card>
  <Card title="DATA QUALITY & CONNECTION">
   <Row label="FYERS connection" value="Not connected"/><Row label="Option-chain feed" value="Pending integration"/><Row label="Last data update" value="--"/><Row label="Data freshness" value="--"/><Row label="AI engine" value="Waiting for live feed"/>
