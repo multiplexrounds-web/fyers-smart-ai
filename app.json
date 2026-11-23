@@ -17,6 +17,10 @@
         "foregroundImage": "./assets/WhatsApp Image 2026-11-22 at 9.10.43 PM.jpeg",
         "backgroundColor": "#090A0D"
       }
-    }
+    },
+    "plugins": [
+      "expo-notifications",
+      "expo-background-task"
+    ]
   }
 }
