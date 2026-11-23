@@ -159,6 +159,7 @@ def market_quotes():
     symbols = [
         ("NIFTY 50", "NSE:NIFTY50-INDEX"),
         ("BANK NIFTY", "NSE:NIFTYBANK-INDEX"),
+        ("FINNIFTY", "NSE:FINNIFTY-INDEX"),
         ("SENSEX", "BSE:SENSEX-INDEX"),
     ]
     try:
@@ -332,6 +333,7 @@ def market_analysis(
     allowed_symbols = {
         "NSE:NIFTY50-INDEX",
         "NSE:NIFTYBANK-INDEX",
+        "NSE:FINNIFTY-INDEX",
         "BSE:SENSEX-INDEX",
     }
     allowed_resolutions = {"1", "3", "5", "10", "15", "30", "60", "120", "240", "D"}
