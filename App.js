@@ -54,7 +54,7 @@ export default function App(){
 
  const [marketQuotes,setMarketQuotes]=useState({});
  const [quoteStatus,setQuoteStatus]=useState('connecting');
- const [selectedIndex,setSelectedIndex]=useState('NIFTY');
+
  const [analysisResolution,setAnalysisResolution]=useState('5');
  const [marketAnalysis,setMarketAnalysis]=useState(null);
  const [analysisStatus,setAnalysisStatus]=useState('connecting');
