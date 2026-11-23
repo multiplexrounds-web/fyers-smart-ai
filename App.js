@@ -115,6 +115,7 @@ export default function App(){
  const breadthDown=breadthQuotes.filter(q=>Number(q.change_percent)<0).length;
  const sentimentBull=breadthQuotes.length?Math.round(breadthUp/breadthQuotes.length*100):0;
  const sentimentBear=breadthQuotes.length?Math.round(breadthDown/breadthQuotes.length*100):0;
+ const sentimentReady=quoteStatus==='live'&&breadthQuotes.length>0;
  const sentimentLabel=quoteStatus!=='live'||!breadthQuotes.length?'WAITING':sentimentBull>=60?'BULLISH':sentimentBear>=60?'BEARISH':'NEUTRAL';
  const livePcr=optionChain?.status==='live'&&optionChain?.summary?.pcr!==null&&optionChain?.summary?.pcr!==undefined&&Number.isFinite(Number(optionChain.summary.pcr))?Number(optionChain.summary.pcr):null;
  const tradeDecisionReady=aiReady&&optionChainStatus==='live'&&livePcr!==null&&riskScore!==null&&riskScore<65;
