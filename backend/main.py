@@ -205,3 +205,121 @@ def market_quotes():
             status_code=502,
             detail="FYERS market quote request failed. Check token validity and market session.",
         )
+
+
+@app.get("/market/analysis")
+def market_analysis(
+    symbol: str = Query(default="NSE:NIFTY50-INDEX"),
+    resolution: str = Query(default="5"),
+):
+    """Calculate technical indicators only from verified FYERS historical candles."""
+    if not _access_token:
+        raise HTTPException(status_code=503, detail="FYERS is not authorized. Re-authorize at /fyers/login.")
+    allowed_symbols = {
+        "NSE:NIFTY50-INDEX",
+        "NSE:NIFTYBANK-INDEX",
+        "BSE:SENSEX-INDEX",
+    }
+    allowed_resolutions = {"1", "3", "5", "10", "15", "30", "60", "120", "240", "D"}
+    if symbol not in allowed_symbols or resolution not in allowed_resolutions:
+        raise HTTPException(status_code=400, detail="Unsupported symbol or timeframe.")
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    start = now - timedelta(days=10 if resolution in {"1", "3", "5", "10", "15"} else 45)
+    try:
+        client = fyersModel.FyersModel(
+            client_id=os.getenv("FYERS_APP_ID", "").strip(),
+            token=_access_token,
+            log_path="",
+        )
+        response = client.history(data={
+            "symbol": symbol,
+            "resolution": resolution,
+            "date_format": "1",
+            "range_from": start.strftime("%Y-%m-%d"),
+            "range_to": now.strftime("%Y-%m-%d"),
+            "cont_flag": "1",
+        })
+        if not isinstance(response, dict) or response.get("s") != "ok":
+            raise RuntimeError("FYERS history request failed")
+        raw = response.get("candles") or []
+        candles = []
+        for item in raw:
+            if not isinstance(item, (list, tuple)) or len(item) < 6:
+                continue
+            try:
+                candles.append({
+                    "time": int(item[0]), "open": float(item[1]),
+                    "high": float(item[2]), "low": float(item[3]),
+                    "close": float(item[4]), "volume": float(item[5]),
+                })
+            except (TypeError, ValueError):
+                continue
+        candles.sort(key=lambda c: c["time"])
+        if len(candles) < 55:
+            return {"status": "insufficient_data", "symbol": symbol, "resolution": resolution,
+                    "candles": candles, "indicators": {}, "mode": "READ ONLY"}
+        closes = [c["close"] for c in candles]
+        highs = [c["high"] for c in candles]
+        lows = [c["low"] for c in candles]
+        volumes = [c["volume"] for c in candles]
+
+        def ema(values, period):
+            alpha = 2.0 / (period + 1)
+            result = [None] * (len(values) - 1)
+            current = sum(values[:period]) / period
+            result.append(current)
+            for value in values[period:]:
+                current = alpha * value + (1 - alpha) * current
+                result.append(current)
+            return result
+
+        ema20_series = ema(closes, 20)
+        ema50_series = ema(closes, 50)
+        gains, losses = [], []
+        for i in range(1, len(closes)):
+            delta = closes[i] - closes[i - 1]
+            gains.append(max(delta, 0.0))
+            losses.append(max(-delta, 0.0))
+        avg_gain = sum(gains[:14]) / 14
+        avg_loss = sum(losses[:14]) / 14
+        for i in range(14, len(gains)):
+            avg_gain = (avg_gain * 13 + gains[i]) / 14
+            avg_loss = (avg_loss * 13 + losses[i]) / 14
+        rsi = 100.0 if avg_loss == 0 else 100 - (100 / (1 + avg_gain / avg_loss))
+        fast, slow = ema(closes, 12), ema(closes, 26)
+        macd_series = [None if a is None or b is None else a - b for a, b in zip(fast, slow)]
+        valid_macd = [v for v in macd_series if v is not None]
+        signal_series = ema(valid_macd, 9) if len(valid_macd) >= 9 else []
+        macd_value = valid_macd[-1] if valid_macd else None
+        macd_signal = signal_series[-1] if signal_series else None
+        # Session VWAP uses only candles from the latest trading date.
+        from datetime import datetime as _dt
+        latest_date = _dt.fromtimestamp(candles[-1]["time"], ZoneInfo("Asia/Kolkata")).date()
+        session = [c for c in candles if _dt.fromtimestamp(c["time"], ZoneInfo("Asia/Kolkata")).date() == latest_date]
+        total_pv = sum(((c["high"] + c["low"] + c["close"]) / 3) * c["volume"] for c in session)
+        total_volume = sum(c["volume"] for c in session)
+        vwap = total_pv / total_volume if total_volume > 0 else None
+        recent = candles[-20:]
+        support = min(c["low"] for c in recent)
+        resistance = max(c["high"] for c in recent)
+        return {
+            "status": "live", "mode": "READ ONLY", "symbol": symbol,
+            "resolution": resolution, "last_updated": candles[-1]["time"],
+            "candles": candles[-200:],
+            "indicators": {
+                "rsi14": round(rsi, 2),
+                "macd": round(macd_value, 4) if macd_value is not None else None,
+                "macd_signal": round(macd_signal, 4) if macd_signal is not None else None,
+                "ema20": round(ema20_series[-1], 2) if ema20_series[-1] is not None else None,
+                "ema50": round(ema50_series[-1], 2) if ema50_series[-1] is not None else None,
+                "vwap": round(vwap, 2) if vwap is not None else None,
+                "support": round(support, 2), "resistance": round(resistance, 2),
+                "volume": candles[-1]["volume"],
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="FYERS candle history unavailable. Verify market session, symbol and token.")
