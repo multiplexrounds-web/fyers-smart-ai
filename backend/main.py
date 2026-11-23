@@ -304,10 +304,49 @@ def market_analysis(
         recent = candles[-20:]
         support = min(c["low"] for c in recent)
         resistance = max(c["high"] for c in recent)
+        # Transparent rule-based scoring; not a trained or calibrated predictor.
+        last, previous = candles[-1], candles[-2]
+        score, reasons = 0, []
+        if ema20_series[-1] > ema50_series[-1]: score += 2; reasons.append("EMA 20 above EMA 50")
+        else: score -= 2; reasons.append("EMA 20 below EMA 50")
+        if rsi >= 55: score += 1; reasons.append("RSI positive momentum")
+        elif rsi <= 45: score -= 1; reasons.append("RSI negative momentum")
+        if macd_value is not None and macd_signal is not None:
+            if macd_value > macd_signal: score += 1; reasons.append("MACD above signal")
+            else: score -= 1; reasons.append("MACD below signal")
+        if vwap is not None:
+            if last["close"] >= vwap: score += 1; reasons.append("Price at/above VWAP")
+            else: score -= 1; reasons.append("Price below VWAP")
+        score += 1 if last["close"] > previous["close"] else -1 if last["close"] < previous["close"] else 0
+        bias = "BULLISH" if score >= 3 else "BEARISH" if score <= -3 else "SIDEWAYS"
+        up_probability = max(10, min(90, round(50 + score * 7)))
+        down_probability = 100 - up_probability
+        recent_high = max(c["high"] for c in candles[-20:-1])
+        recent_low = min(c["low"] for c in candles[-20:-1])
+        breakout = "BREAKOUT" if last["close"] > recent_high else "BREAKDOWN" if last["close"] < recent_low else "NO CONFIRMED BREAKOUT"
+        candle_range = max(last["high"] - last["low"], 0.000001)
+        upper_wick = last["high"] - max(last["open"], last["close"])
+        lower_wick = min(last["open"], last["close"]) - last["low"]
+        bull_trap = last["high"] > recent_high and last["close"] < recent_high and upper_wick > candle_range * .3
+        bear_trap = last["low"] < recent_low and last["close"] > recent_low and lower_wick > candle_range * .3
+        volatility = sum((c["high"]-c["low"])/max(c["close"],0.000001) for c in candles[-14:])/14
+        risk_score = min(100, max(5, round(volatility * 10000)))
         return {
             "status": "live", "mode": "READ ONLY", "symbol": symbol,
             "resolution": resolution, "last_updated": candles[-1]["time"],
             "candles": candles[-200:],
+            "ai_analysis": {
+                "status": "live", "market_bias": bias,
+                "direction": "UPWARD" if up_probability > 55 else "DOWNWARD" if up_probability < 45 else "SIDEWAYS",
+                "next_candle_up_probability": up_probability, "next_candle_down_probability": down_probability,
+                "next_5m_outlook": "POSITIVE BIAS" if score >= 3 else "NEGATIVE BIAS" if score <= -3 else "NO CLEAR BIAS",
+                "confidence": min(95, 50 + abs(score) * 8), "risk_score": risk_score,
+                "risk_level": "HIGH" if risk_score >= 65 else "MODERATE" if risk_score >= 35 else "LOW",
+                "breakout_status": breakout, "bull_trap": bool(bull_trap), "bear_trap": bool(bear_trap),
+                "reasons": reasons, "trade_signal": "WAIT",
+                "trade_signal_note": "Option-chain OI/IV confirmation is not connected; CE/PE calls remain disabled.",
+                "option_chain_status": "PENDING"
+            },
             "indicators": {
                 "rsi14": round(rsi, 2),
                 "macd": round(macd_value, 4) if macd_value is not None else None,
