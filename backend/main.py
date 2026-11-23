@@ -145,3 +145,63 @@ def fyers_callback(
         "<p>No orders can be placed by this application.</p>",
         status_code=200,
     )
+
+
+@app.get("/market/quotes")
+def market_quotes():
+    """Return verified FYERS index quotes only; never synthesize missing values."""
+    if not _access_token:
+        raise HTTPException(
+            status_code=503,
+            detail="FYERS is not authorized in this backend process. Re-authorize at /fyers/login.",
+        )
+    app_id = os.getenv("FYERS_APP_ID", "").strip()
+    symbols = [
+        ("NIFTY 50", "NSE:NIFTY50-INDEX"),
+        ("BANK NIFTY", "NSE:NIFTYBANK-INDEX"),
+        ("SENSEX", "BSE:SENSEX-INDEX"),
+    ]
+    try:
+        client = fyersModel.FyersModel(
+            client_id=app_id,
+            token=_access_token,
+            log_path="",
+        )
+        response = client.quotes(data={"symbols": ",".join(symbol for _, symbol in symbols)})
+        if not isinstance(response, dict) or response.get("s") != "ok":
+            raise RuntimeError("FYERS quote request was not successful")
+        by_symbol = {}
+        for item in response.get("d", []):
+            if not isinstance(item, dict) or item.get("s") != "ok":
+                continue
+            value = item.get("v") or {}
+            by_symbol[item.get("n")] = value
+        quotes = []
+        for name, symbol in symbols:
+            value = by_symbol.get(symbol)
+            if not value or value.get("lp") is None:
+                continue
+            quotes.append({
+                "name": name,
+                "symbol": symbol,
+                "last_price": value.get("lp"),
+                "change": value.get("ch"),
+                "change_percent": value.get("chp"),
+                "open": value.get("open_price"),
+                "high": value.get("high_price"),
+                "low": value.get("low_price"),
+                "previous_close": value.get("prev_close_price"),
+                "volume": value.get("volume"),
+            })
+        return {
+            "status": "live" if quotes else "empty",
+            "mode": "READ ONLY",
+            "quotes": quotes,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="FYERS market quote request failed. Check token validity and market session.",
+        )
