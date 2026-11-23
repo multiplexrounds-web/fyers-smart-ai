@@ -207,6 +207,120 @@ def market_quotes():
         )
 
 
+
+@app.get("/market/option-chain")
+def market_option_chain(
+    symbol: str = Query(default="NSE:NIFTY50-INDEX"),
+    strikecount: int = Query(default=10, ge=1, le=20),
+):
+    """Read-only FYERS option-chain snapshot with verified fields only."""
+    if not _access_token:
+        raise HTTPException(status_code=503, detail="FYERS is not authorized. Re-authorize at /fyers/login.")
+    allowed = {
+        "NSE:NIFTY50-INDEX", "NSE:NIFTYBANK-INDEX",
+        "NSE:FINNIFTY-INDEX", "BSE:SENSEX-INDEX",
+    }
+    if symbol not in allowed:
+        raise HTTPException(status_code=400, detail="Unsupported option-chain underlying.")
+    try:
+        client = fyersModel.FyersModel(
+            client_id=os.getenv("FYERS_APP_ID", "").strip(),
+            token=_access_token,
+            log_path="",
+        )
+        response = client.optionchain(data={
+            "symbol": symbol,
+            "strikecount": strikecount,
+            "timestamp": "",
+        })
+        if not isinstance(response, dict) or response.get("s") != "ok":
+            raise RuntimeError("FYERS option-chain request failed")
+        payload = response.get("data") or {}
+        raw_chain = payload.get("optionsChain") or payload.get("options_chain") or []
+        chain = []
+        for item in raw_chain:
+            if not isinstance(item, dict):
+                continue
+            opt_type = str(item.get("option_type") or item.get("optionType") or "").upper()
+            if opt_type not in {"CE", "PE"}:
+                continue
+            strike = item.get("strike_price", item.get("strikePrice"))
+            try:
+                strike = float(strike)
+            except (TypeError, ValueError):
+                continue
+            def number(*keys):
+                for key in keys:
+                    value = item.get(key)
+                    if value is not None:
+                        try:
+                            return float(value)
+                        except (TypeError, ValueError):
+                            pass
+                return None
+            chain.append({
+                "symbol": item.get("symbol"),
+                "option_type": opt_type,
+                "strike_price": strike,
+                "ltp": number("ltp", "last_price"),
+                "oi": number("oi", "open_interest"),
+                "oi_change": number("oich", "oi_change", "change_in_oi"),
+                "oi_change_percent": number("oipercent", "oi_change_percent"),
+                "volume": number("volume"),
+                "iv": number("iv", "implied_volatility"),
+                "bid": number("bid"),
+                "ask": number("ask"),
+            })
+        if not chain:
+            return {
+                "status": "empty", "mode": "READ ONLY", "symbol": symbol,
+                "underlying_value": payload.get("underlyingValue"),
+                "expiry_data": payload.get("expiryData") or [],
+                "options_chain": [],
+                "message": "FYERS returned no option contracts for this underlying/expiry.",
+            }
+        calls = [x for x in chain if x["option_type"] == "CE"]
+        puts = [x for x in chain if x["option_type"] == "PE"]
+        call_oi = sum(x["oi"] or 0 for x in calls)
+        put_oi = sum(x["oi"] or 0 for x in puts)
+        pcr = round(put_oi / call_oi, 3) if call_oi else None
+        strikes = sorted({x["strike_price"] for x in chain})
+        max_pain = None
+        if strikes:
+            def pain_at(settlement):
+                total = 0.0
+                for option in calls:
+                    total += max(0.0, settlement - option["strike_price"]) * (option["oi"] or 0)
+                for option in puts:
+                    total += max(0.0, option["strike_price"] - settlement) * (option["oi"] or 0)
+                return total
+            max_pain = min(strikes, key=pain_at)
+        underlying = payload.get("underlyingValue")
+        try:
+            underlying = float(underlying) if underlying is not None else None
+        except (TypeError, ValueError):
+            underlying = None
+        expiry_data = payload.get("expiryData") or []
+        return {
+            "status": "live", "mode": "READ ONLY", "symbol": symbol,
+            "underlying_value": underlying,
+            "expiry_data": expiry_data,
+            "options_chain": sorted(chain, key=lambda x: (x["strike_price"], x["option_type"])),
+            "summary": {
+                "call_oi": call_oi, "put_oi": put_oi, "pcr": pcr,
+                "max_pain": max_pain,
+                "total_call_volume": sum(x["volume"] or 0 for x in calls),
+                "total_put_volume": sum(x["volume"] or 0 for x in puts),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="FYERS option-chain request failed. Verify API access, underlying symbol and market session.",
+        )
+
 @app.get("/market/analysis")
 def market_analysis(
     symbol: str = Query(default="NSE:NIFTY50-INDEX"),
