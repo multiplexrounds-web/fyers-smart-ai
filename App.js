@@ -102,9 +102,10 @@ export default function App(){
  const showMetric=(value,digits=2)=>value===null||value===undefined?'--':typeof value==='number'?value.toFixed(digits):String(value);
  const aiAnalysis=marketAnalysis?.ai_analysis||{};
  const aiReady=analysisStatus==='live'&&aiAnalysis.status==='live';
- const riskScore=aiReady&&Number.isFinite(Number(aiAnalysis.risk_score))?Math.max(0,Math.min(100,Number(aiAnalysis.risk_score))):null;
+ const riskScore=aiReady&&aiAnalysis.risk_score!==null&&aiAnalysis.risk_score!==undefined&&Number.isFinite(Number(aiAnalysis.risk_score))?Math.max(0,Math.min(100,Number(aiAnalysis.risk_score))):null;
  const riskLevel=riskScore===null?'Awaiting data':aiRiskLevel(riskScore);
- const currentPrice=Number(liveCandles?.[liveCandles.length-1]?.close);
+ const riskCandles=marketAnalysis?.candles||[];
+ const currentPrice=Number(riskCandles[riskCandles.length-1]?.close);
  const emaSpread=Number.isFinite(currentPrice)&&currentPrice>0&&Number.isFinite(Number(analysisIndicators.ema20))&&Number.isFinite(Number(analysisIndicators.ema50))?Math.abs(Number(analysisIndicators.ema20)-Number(analysisIndicators.ema50))/currentPrice*100:null;
  const trendStability=emaSpread===null?null:Math.max(0,Math.min(100,Math.round(100-emaSpread*200)));
  const momentumScore=aiReady&&Number.isFinite(Number(analysisIndicators.rsi14))?Math.round(Math.min(100,Math.abs(Number(analysisIndicators.rsi14)-50)*2)):null;
