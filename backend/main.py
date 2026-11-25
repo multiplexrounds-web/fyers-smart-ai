@@ -269,6 +269,10 @@ def market_option_chain(
                 "oi_change_percent": number("oipercent", "oi_change_percent"),
                 "volume": number("volume"),
                 "iv": number("iv", "implied_volatility"),
+                "delta": number("delta", "delta_value"),
+                "gamma": number("gamma", "gamma_value"),
+                "theta": number("theta", "theta_value"),
+                "vega": number("vega", "vega_value"),
                 "bid": number("bid"),
                 "ask": number("ask"),
             })
