@@ -13,36 +13,103 @@ async function ensureNotificationChannels(){for(const channel of Object.values(N
 
 const VGROW_MARKET_BACKGROUND_TASK='VGROW_MARKET_BACKGROUND_TASK';
 const INDEX_SYMBOLS={NIFTY:'NSE:NIFTY50-INDEX',BANKNIFTY:'NSE:NIFTYBANK-INDEX',FINNIFTY:'NSE:FINNIFTY-INDEX',SENSEX:'BSE:SENSEX-INDEX'};
-async function notifyForMarketSetup(symbol,index,data){
- const ai=data?.ai_analysis||{};
- const setup=ai.breakout_status;
- if(data?.status!=='live'||!['BREAKOUT','BREAKDOWN'].includes(setup))return false;
- const candleTime=String(data.last_updated||data.candles?.[data.candles.length-1]?.time||'');
- if(!candleTime)return false;
- const key=`${symbol}:${candleTime}:${setup}`;
- const previous=await SecureStore.getItemAsync('vgrow_last_setup_notification');
- if(previous===key)return false;
- if((await SecureStore.getItemAsync('vgrow_notify_pref_breakout'))==='disabled')return false;
+async function sendMarketAlert(type,title,body,dedupeKey){
+ const enabled=(await SecureStore.getItemAsync('vgrow_notifications_enabled'))==='enabled';
+ const preference=await SecureStore.getItemAsync('vgrow_notify_pref_'+type);
+ if(!enabled||preference==='disabled')return false;
+ const key='vgrow_alert_last_'+type;
+ if(dedupeKey&&await SecureStore.getItemAsync(key)===dedupeKey)return false;
  await ensureNotificationChannels();
- await Notifications.scheduleNotificationAsync({content:{title:`Vgrow • ${index} Market Setup`,body:`${setup==='BREAKOUT'?'Confirmed upside breakout':'Confirmed downside breakdown'} detected from verified FYERS candles.`,channelId:NOTIFICATION_CHANNELS.breakout.id,sound:true,data:{symbol,index,setup,candleTime}},trigger:null});
- await SecureStore.setItemAsync('vgrow_last_setup_notification',key);
+ const sound=(await SecureStore.getItemAsync('vgrow_notify_sound'))!=='disabled';
+ const vibration=(await SecureStore.getItemAsync('vgrow_notify_vibration'))!=='disabled';
+ await Notifications.scheduleNotificationAsync({content:{title:'Vgrow • '+title,body,channelId:NOTIFICATION_CHANNELS[type].id,sound:sound?NOTIFICATION_CHANNELS[type].sound:false,data:{type}},trigger:null});
+ if(dedupeKey)await SecureStore.setItemAsync(key,dedupeKey);
  return true;
+}
+async function notifyOnStateChange(type,state,title,body,notifyWait=false){
+ const key='vgrow_alert_state_'+type;
+ const previous=await SecureStore.getItemAsync(key);
+ await SecureStore.setItemAsync(key,state);
+ if(previous===null||previous===state)return false;
+ if(state==='WAIT'&&!notifyWait)return false;
+ return sendMarketAlert(type,title,body,type+':'+state+':'+Date.now());
+}
+async function processMarketAlerts(index,analysis,quotes,optionChain,selectedStrike,selectedType){
+ if(analysis?.status!=='live'||analysis?.ai_analysis?.status!=='live')return;
+ const ai=analysis.ai_analysis||{},candles=Array.isArray(analysis.candles)?analysis.candles:[];
+ const last=candles[candles.length-1],prev=candles[candles.length-2];
+ const stamp=String(last?.time||analysis.last_updated||'');
+ const price=Number(last?.close),ind=analysis.indicators||{};
+ const valid=n=>n!==null&&n!==undefined&&Number.isFinite(Number(n));
+ if(!last||!stamp||!valid(price)||price<=0)return;
+ const chainLive=optionChain?.status==='live'&&Array.isArray(optionChain.options_chain)&&optionChain.options_chain.length>0;
+ const rows=chainLive?optionChain.options_chain:[];
+ const pcr=Number(optionChain?.summary?.pcr);
+ const risk=Number(ai.risk_score);
+ const tradeReady=chainLive&&valid(pcr)&&valid(risk)&&risk<65;
+ const trade=tradeReady&&ai.market_bias==='BULLISH'&&pcr>=1.1?'BUY CE':tradeReady&&ai.market_bias==='BEARISH'&&pcr<=0.9?'BUY PE':'WAIT';
+ if(tradeReady)await notifyOnStateChange('trade',trade,'AI Smart Trade Decision',trade+' • '+index+' | PCR '+pcr.toFixed(2)+' | Risk '+Math.round(risk)+'/100',true);
+ const breakout=ai.breakout_status;
+ if(['BREAKOUT','BREAKDOWN'].includes(breakout))await sendMarketAlert('breakout','Breakout / Breakdown',(breakout==='BREAKOUT'?'Confirmed upside breakout':'Confirmed downside breakdown')+' • '+index+' • '+price,stamp+':'+breakout);
+ if(chainLive){
+  const oiCandidates=rows.filter(r=>valid(r.oi_change)&&Number(r.oi_change)!==0&&valid(r.ltp)).map(r=>{
+   const change=Number(r.change??r.ltp_change??r.price_change);
+   let signal='';if(valid(change)){const oi=Number(r.oi_change);signal=oi>0&&change>0?'LONG BUILD-UP':oi>0&&change<0?'SHORT BUILD-UP':oi<0&&change>0?'SHORT COVERING':oi<0&&change<0?'LONG UNWINDING':'';}
+   return {...r,signal,absOi:Math.abs(Number(r.oi_change))};
+  }).filter(r=>r.signal);
+  oiCandidates.sort((a,b)=>b.absOi-a.absOi);
+  const top=oiCandidates[0];
+  if(top){const oiStamp=String(optionChain.last_updated||optionChain.timestamp||stamp);await sendMarketAlert('option','Option Chain AI',top.signal+' • '+top.option_type+' '+top.strike_price+' • OI change '+top.oi_change,oiStamp+':'+top.option_type+':'+top.strike_price+':'+top.signal);}
+  const calls=rows.filter(r=>r.option_type==='CE'&&Number(r.oi)>0).sort((a,b)=>Number(b.oi)-Number(a.oi));
+  const puts=rows.filter(r=>r.option_type==='PE'&&Number(r.oi)>0).sort((a,b)=>Number(b.oi)-Number(a.oi));
+  const resistance=Number(calls[0]?.strike_price),support=Number(puts[0]?.strike_price);
+  if(prev&&valid(prev.close)){
+   const prior=Number(prev.close);
+   if(valid(resistance)&&prior<resistance&&price>=resistance)await sendMarketAlert('levels','Support & Resistance','Price crossed strongest CE OI resistance '+resistance+' • '+index,stamp+':RES:'+resistance);
+   if(valid(support)&&prior>support&&price<=support)await sendMarketAlert('levels','Support & Resistance','Price crossed strongest PE OI support '+support+' • '+index,stamp+':SUP:'+support);
+  }
+ }
+ const quoteRows=Array.isArray(quotes?.quotes)?quotes.quotes:[];
+ const usable=quoteRows.filter(q=>valid(q.change_percent));
+ if(quotes?.status==='live'&&usable.length){
+  const up=usable.filter(q=>Number(q.change_percent)>0).length,down=usable.filter(q=>Number(q.change_percent)<0).length;
+  const sentiment=up/usable.length>=0.6?'BULLISH':down/usable.length>=0.6?'BEARISH':'NEUTRAL';
+  await notifyOnStateChange('sentiment',sentiment,'Market Sentiment',sentiment+' breadth • '+up+' advances / '+down+' declines',false);
+ }
+ if(chainLive&&selectedStrike!==null&&selectedStrike!==undefined&&selectedType){
+  const contract=rows.find(r=>Number(r.strike_price)===Number(selectedStrike)&&r.option_type===selectedType);
+  const relVol=candles.length>=21&&Number(last.volume)>0?Number(last.volume)/(candles.slice(-21,-1).reduce((sum,c)=>sum+Number(c.volume||0),0)/20||1):null;
+  const greeksReady=contract&&['delta','gamma','theta','vega','iv'].every(k=>valid(contract[k]));
+  const oiReady=contract&&valid(contract.oi)&&valid(contract.oi_change);
+  const volumeReady=contract&&Number(contract.volume)>0&&relVol!==null&&relVol>=1;
+  const trendUp=Number(ind.ema20)>Number(ind.ema50)&&Number(ind.rsi14)>=55&&Number(ind.macd)>Number(ind.macd_signal)&&Number(ind.vwap)>0&&price>=Number(ind.vwap);
+  const trendDown=Number(ind.ema20)<Number(ind.ema50)&&Number(ind.rsi14)<=45&&Number(ind.macd)<Number(ind.macd_signal)&&Number(ind.vwap)>0&&price<=Number(ind.vwap);
+  const priceUp=!!(prev&&price>Number(prev.close)&&breakout==='BREAKOUT'),priceDown=!!(prev&&price<Number(prev.close)&&breakout==='BREAKDOWN');
+  const bull=(trendUp?25:0)+(priceUp?15:0)+(oiReady&&Number(contract.oi_change)>0&&selectedType==='CE'?20:0)+(greeksReady&&Number(contract.delta)>0.35?15:0)+(volumeReady?15:0)+(risk<35?10:risk<65?5:0);
+  const bear=(trendDown?25:0)+(priceDown?15:0)+(oiReady&&Number(contract.oi_change)>0&&selectedType==='PE'?20:0)+(greeksReady&&Number(contract.delta)<-0.35?15:0)+(volumeReady?15:0)+(risk<35?10:risk<65?5:0);
+  const scalpReady=ai.status==='live'&&valid(risk)&&risk<65&&oiReady&&greeksReady&&volumeReady;
+  const scalp=scalpReady&&selectedType==='CE'&&bull>=75?'BUY CE':scalpReady&&selectedType==='PE'&&bear>=75?'BUY PE':'WAIT';
+  if(scalpReady)await notifyOnStateChange('scalping',scalp,'AI Smart Scalping',scalp+' • '+selectedStrike+' '+selectedType+' • Score '+(selectedType==='CE'?bull:bear)+'/100',false);
+ }
 }
 TaskManager.defineTask(VGROW_MARKET_BACKGROUND_TASK,async()=>{
  try{
   const index=(await SecureStore.getItemAsync('vgrow_selected_index'))||'NIFTY';
   const symbol=INDEX_SYMBOLS[index]||INDEX_SYMBOLS.NIFTY;
-  const [quotesResponse,analysisResponse]=await Promise.all([
+  const [quotesResponse,analysisResponse,chainResponse]=await Promise.all([
    fetch('https://fyers-smart-ai-1.onrender.com/market/quotes'),
-   fetch('https://fyers-smart-ai-1.onrender.com/market/analysis?symbol='+encodeURIComponent(symbol)+'&resolution=5')
+   fetch('https://fyers-smart-ai-1.onrender.com/market/analysis?symbol='+encodeURIComponent(symbol)+'&resolution=5'),
+   fetch('https://fyers-smart-ai-1.onrender.com/market/option-chain?symbol='+encodeURIComponent(symbol)+'&strikecount=20')
   ]);
   const quotes=quotesResponse.ok?await quotesResponse.json():null;
   const analysis=analysisResponse.ok?await analysisResponse.json():null;
+  const chain=chainResponse.ok?await chainResponse.json():null;
   if(quotes)await SecureStore.setItemAsync('vgrow_background_quotes',JSON.stringify({saved_at:Date.now(),data:quotes}));
   if(analysis)await SecureStore.setItemAsync('vgrow_background_analysis',JSON.stringify({saved_at:Date.now(),data:analysis}));
+  if(chain)await SecureStore.setItemAsync('vgrow_background_option_chain',JSON.stringify({saved_at:Date.now(),data:chain}));
   const alertsEnabled=(await SecureStore.getItemAsync('vgrow_notifications_enabled'))==='enabled';
-  if(alertsEnabled&&analysis)await notifyForMarketSetup(symbol,index,analysis);
-  return quotes||analysis?BackgroundTask.BackgroundTaskResult.NewData:BackgroundTask.BackgroundTaskResult.NoData;
+  if(alertsEnabled&&analysis)await processMarketAlerts(index,analysis,quotes,chain,await SecureStore.getItemAsync('vgrow_scalp_strike'),await SecureStore.getItemAsync('vgrow_scalp_type'));
+  return quotes||analysis||chain?BackgroundTask.BackgroundTaskResult.NewData:BackgroundTask.BackgroundTaskResult.NoData;
  }catch(e){return BackgroundTask.BackgroundTaskResult.Failed;}
 });
 import Svg,{Path,Line,Circle,Text as SvgText} from 'react-native-svg';
@@ -200,6 +267,7 @@ export default function App(){
  const [bioReady,setBioReady]=useState(false),[appLocked,setAppLocked]=useState(false);
  useEffect(()=>{let active=true;(async()=>{try{const savedTheme=await SecureStore.getItemAsync('vgrow_theme_index');if(active&&savedTheme!==null){const parsedTheme=Number(savedTheme);if(Number.isInteger(parsedTheme)&&parsedTheme>=0&&parsedTheme<THEMES.length)setTheme(parsedTheme);}if(active)setThemeReady(true);const saved=await SecureStore.getItemAsync('vgrow_biometric_lock');if(saved==='enabled'&&active){setFinger(true);setAppLocked(true);const result=await LocalAuthentication.authenticateAsync({promptMessage:'Unlock Vgrow',cancelLabel:'Cancel',disableDeviceFallback:false});if(active&&result.success)setAppLocked(false);}}catch(e){if(active)Alert.alert('Security','Biometric lock could not be started on this device.');}})();return()=>{active=false}},[]);
  const toggleFingerprint=async(enabled)=>{if(!enabled){await SecureStore.deleteItemAsync('vgrow_biometric_lock');setFinger(false);return;}try{const hardware=await LocalAuthentication.hasHardwareAsync();const enrolled=await LocalAuthentication.isEnrolledAsync();if(!hardware||!enrolled){Alert.alert('Fingerprint unavailable','या फोनमध्ये fingerprint/biometric सेट केलेले नाही. आधी फोनच्या Settings मध्ये fingerprint नोंदवा.');return;}const result=await LocalAuthentication.authenticateAsync({promptMessage:'Enable Vgrow fingerprint lock',cancelLabel:'Cancel',disableDeviceFallback:false});if(result.success){await SecureStore.setItemAsync('vgrow_biometric_lock','enabled');setFinger(true);Alert.alert('Security enabled','Vgrow biometric lock enabled.');}}catch(e){Alert.alert('Security error','Biometric lock could not be enabled.');}};
+ useEffect(()=>{let active=true;(async()=>{try{const strike=await SecureStore.getItemAsync('vgrow_scalp_strike');const type=await SecureStore.getItemAsync('vgrow_scalp_type');if(active&&strike!==null)setScalpStrike(Number(strike));if(active&&type&&['CE','PE'].includes(type))setScalpType(type);}catch(e){}})();return()=>{active=false}},[]);
  useEffect(()=>{if(!themeReady)return;SecureStore.setItemAsync('vgrow_theme_index',String(theme)).catch(()=>{});},[theme,themeReady]);
  useEffect(()=>{SecureStore.setItemAsync('vgrow_selected_index',selectedIndex).catch(()=>{});},[selectedIndex]);
  useEffect(()=>{let active=true;(async()=>{try{const saved=await SecureStore.getItemAsync('vgrow_notifications_enabled');if(active&&saved==='enabled')setNotify(true);for(const key of Object.keys(NOTIFICATION_CHANNELS)){const value=await SecureStore.getItemAsync('vgrow_notify_pref_'+key);if(active&&value!==null)setNotifyPrefs(previous=>({...previous,[key]:value==='enabled'}));}const savedSound=await SecureStore.getItemAsync('vgrow_notify_sound');if(active&&savedSound!==null)setNotifySound(savedSound==='enabled');const savedVibration=await SecureStore.getItemAsync('vgrow_notify_vibration');if(active&&savedVibration!==null)setNotifyVibration(savedVibration==='enabled');const registered=await TaskManager.isTaskRegisteredAsync(VGROW_MARKET_BACKGROUND_TASK);if(!registered)await BackgroundTask.registerTaskAsync(VGROW_MARKET_BACKGROUND_TASK,{minimumInterval:15});}catch(e){}})();return()=>{active=false}},[]);
@@ -208,7 +276,7 @@ export default function App(){
   const updateNotifySound=async(value)=>{setNotifySound(value);await SecureStore.setItemAsync('vgrow_notify_sound',value?'enabled':'disabled');};
   const updateNotifyVibration=async(value)=>{setNotifyVibration(value);await SecureStore.setItemAsync('vgrow_notify_vibration',value?'enabled':'disabled');};
   const toggleNotifications=async(enabled)=>{if(enabled){const permission=await Notifications.requestPermissionsAsync();if(!permission.granted){Alert.alert('Notifications disabled','Allow Vgrow notifications in Android Settings to receive market setup alerts.');return;}await ensureNotificationChannels();await SecureStore.setItemAsync('vgrow_notifications_enabled','enabled');setNotify(true);}else{await SecureStore.setItemAsync('vgrow_notifications_enabled','disabled');setNotify(false);}};
- useEffect(()=>{if(!notify||!aiReady)return;notifyForMarketSetup(analysisSymbol,selectedIndex,marketAnalysis).catch(()=>{});},[notify,aiReady,analysisSymbol,selectedIndex,marketAnalysis]);
+ useEffect(()=>{if(!notify||!aiReady)return;const quotes={status:quoteStatus,quotes:Object.values(marketQuotes||{})};processMarketAlerts(selectedIndex,marketAnalysis,quotes,optionChain,scalpStrike,scalpType).catch(()=>{});},[notify,aiReady,analysisSymbol,selectedIndex,marketAnalysis,quoteStatus,marketQuotes,optionChain,scalpStrike,scalpType]);
  useEffect(()=>{const id=setInterval(()=>setTime(new Date()),1000);return()=>clearInterval(id)},[]);
  useEffect(()=>{let active=true;(async()=>{try{const saved=await SecureStore.getItemAsync('vgrow_ai_performance_records_v1');if(active&&saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed))setPerformanceRecords(parsed);}}catch(e){}finally{if(active)setPerformanceLoaded(true);}})();return()=>{active=false}},[]);
  useEffect(()=>{if(!performanceLoaded)return;SecureStore.setItemAsync('vgrow_ai_performance_records_v1',JSON.stringify(performanceRecords)).catch(()=>{});},[performanceRecords,performanceLoaded]);
@@ -308,9 +376,9 @@ export default function App(){
  </Card>
  <Card title="SELECT CONTRACT • MANUAL SELECTION">
   <AppText style={s.eyebrow}>OPTION TYPE</AppText>
-  <View style={s.wrap}>{['CE','PE'].map(x=><TouchableOpacity key={x} onPress={()=>setScalpType(x)} style={[s.chip,{minWidth:92,alignItems:'center',borderColor:scalpType===x?accent:'#77847766',backgroundColor:scalpType===x?accent+'28':'transparent'}]}><AppText style={[s.chipText,{fontSize:14,color:scalpType===x?accent:fg}]}>{x}{scalpType===x?' ✓':''}</AppText></TouchableOpacity>)}</View>
+  <View style={s.wrap}>{['CE','PE'].map(x=><TouchableOpacity key={x} onPress={()=>{setScalpType(x);SecureStore.setItemAsync('vgrow_scalp_type',x).catch(()=>{});}} style={[s.chip,{minWidth:92,alignItems:'center',borderColor:scalpType===x?accent:'#77847766',backgroundColor:scalpType===x?accent+'28':'transparent'}]}><AppText style={[s.chipText,{fontSize:14,color:scalpType===x?accent:fg}]}>{x}{scalpType===x?' ✓':''}</AppText></TouchableOpacity>)}</View>
   <AppText style={s.eyebrow}>SELECT STRIKE FROM COMPLETE OPTION CHAIN</AppText>
-  <View style={s.wrap}>{optionNearby.map(k=><TouchableOpacity key={k} onPress={()=>setScalpStrike(k)} style={[s.chip,{borderColor:Number(scalpStrike)===k?accent:'#77847766',backgroundColor:Number(scalpStrike)===k?accent+'28':'transparent'}]}><AppText style={[s.chipText,{color:Number(scalpStrike)===k?accent:fg}]}>{optionFmt(k)}{Number(scalpStrike)===k?' ✓':''}</AppText></TouchableOpacity>)}</View>
+  <View style={s.wrap}>{optionNearby.map(k=><TouchableOpacity key={k} onPress={()=>{setScalpStrike(k);SecureStore.setItemAsync('vgrow_scalp_strike',String(k)).catch(()=>{});}} style={[s.chip,{borderColor:Number(scalpStrike)===k?accent:'#77847766',backgroundColor:Number(scalpStrike)===k?accent+'28':'transparent'}]}><AppText style={[s.chipText,{color:Number(scalpStrike)===k?accent:fg}]}>{optionFmt(k)}{Number(scalpStrike)===k?' ✓':''}</AppText></TouchableOpacity>)}</View>
   <Row label="Selected contract" value={scalpContract?optionFmt(scalpContract.strike_price)+' '+scalpType:'Choose CE/PE and strike'}/>
   <Row label="Entry premium (LTP)" value={showMetric(scalpContract?.ltp)}/>
  </Card>
