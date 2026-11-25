@@ -19,7 +19,19 @@
       }
     },
     "plugins": [
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/ai_trade.wav",
+            "./assets/sounds/breakout.wav",
+            "./assets/sounds/option_chain.wav",
+            "./assets/sounds/support_resistance.wav",
+            "./assets/sounds/market_sentiment.wav",
+            "./assets/sounds/scalping.wav"
+          ]
+        }
+      ],
       "expo-background-task"
     ]
   }
