@@ -77,6 +77,7 @@ export default function App(){
  const [optionChainStatus,setOptionChainStatus]=useState('connecting');
  const [scalpStrike,setScalpStrike]=useState(null);
  const [scalpType,setScalpType]=useState('CE');
+ const [scalpChainTab,setScalpChainTab]=useState('LTP');
  const optionSymbols={'NIFTY':'NSE:NIFTY50-INDEX','BANKNIFTY':'NSE:NIFTYBANK-INDEX','FINNIFTY':'NSE:FINNIFTY-INDEX','SENSEX':'BSE:SENSEX-INDEX'};
  const optionUnderlying=optionSymbols[selectedIndex];
  const optionRows=optionChain?.options_chain||[];
@@ -260,39 +261,46 @@ export default function App(){
   <Row label="Selected contract" value={scalpContract?optionFmt(scalpContract.strike_price)+' '+scalpType:'Choose CE/PE and strike'}/>
   <Row label="Entry premium (LTP)" value={showMetric(scalpContract?.ltp)}/>
  </Card>
- <Card title={'COMPLETE OPTION CHAIN • '+selectedIndex} extra={<AppText style={optionChainStatus==='live'?s.green:s.accent}>{optionChainStatus==='live'?'● FYERS LIVE':'● '+optionChainStatus.toUpperCase()}</AppText>}>
-  <View style={s.marketGrid}>
-   {[{a:'PCR',v:optionFmt(optionSummary.pcr,3)},{a:'MAX PAIN',v:optionFmt(optionSummary.max_pain)},{a:'SPOT',v:optionFmt(optionSpot,2)}].map(x=><View key={x.a} style={[s.marketCard,{width:'31%',minHeight:62}]}><AppText style={s.marketName}>{x.a}</AppText><AppText style={[s.marketValue,{fontSize:15}]}>{x.v}</AppText></View>)}
+ <Card title={'OPTION CHAIN • '+selectedIndex} extra={<AppText style={optionChainStatus==='live'?s.green:s.accent}>{optionChainStatus==='live'?'● FYERS LIVE':'● '+optionChainStatus.toUpperCase()}</AppText>}>
+  <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+   <View><AppText style={{fontSize:16,fontWeight:'900',color:fg}}>{selectedIndex}</AppText><AppText style={s.settingDesc}>Spot {optionFmt(optionSpot,2)}</AppText></View>
+   <View style={[s.chip,{borderColor:accent,backgroundColor:accent+'18'}]}><AppText style={[s.chipText,{color:accent}]}>{String(optionExpiry)}</AppText></View>
   </View>
-  <AppText style={[s.settingDesc,{marginBottom:8}]}>Tap any CE or PE row to select its strike. All values are sourced from the existing FYERS option-chain feed.</AppText>
-  <ScrollView horizontal showsHorizontalScrollIndicator>
-   <View>
-    <View style={{flexDirection:'row',backgroundColor:'#10234A',paddingVertical:8}}>
-     {['CALLS • CE','STRIKE','PUTS • PE'].map((x,i)=><View key={x} style={{width:i===1?88:300,alignItems:'center'}}><AppText style={{color:i===0?'#20C779':i===2?'#F06B72':fg,fontWeight:'900',fontSize:12}}>{x}</AppText></View>)}
-    </View>
-    <View style={{flexDirection:'row',backgroundColor:card,paddingVertical:6}}>
-     {['LTP | OI | OI Δ | VOL | IV | Δ','STRIKE','LTP | OI | OI Δ | VOL | IV | Δ'].map((x,i)=><View key={i} style={{width:i===1?88:300,alignItems:'center'}}><AppText style={s.chartCaption}>{x}</AppText></View>)}
-    </View>
-    {optionNearby.length?optionNearby.map(strike=>{
-     const ce=optionRows.find(x=>x.strike_price===strike&&x.option_type==='CE');
-     const pe=optionRows.find(x=>x.strike_price===strike&&x.option_type==='PE');
-     const selected=Number(scalpStrike)===strike;
-     const cell=(v,d=0)=>optionFmt(v,d);
-     return <View key={strike} style={{flexDirection:'row',borderBottomWidth:1,borderBottomColor:'#77847735',backgroundColor:selected?accent+'18':'transparent',alignItems:'stretch'}}>
-      <TouchableOpacity onPress={()=>{setScalpType('CE');setScalpStrike(strike);}} style={{width:300,paddingVertical:9,paddingHorizontal:5,borderRightWidth:1,borderColor:'#77847730'}}>
-       <AppText style={{color:'#20C779',fontWeight:'900',fontSize:11}}>{cell(ce?.ltp,2)}  |  {cell(ce?.oi)}  |  {cell(ce?.oi_change)}  |  {cell(ce?.volume)}  |  {cell(ce?.iv,1)}  |  {cell(ce?.delta,2)}</AppText>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={()=>setScalpStrike(strike)} style={{width:88,alignItems:'center',justifyContent:'center',borderRightWidth:1,borderColor:'#77847730'}}>
-       <AppText style={{fontWeight:'900',fontSize:12,color:selected?accent:fg}}>{cell(strike)}{selected?' ✓':''}</AppText>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={()=>{setScalpType('PE');setScalpStrike(strike);}} style={{width:300,paddingVertical:9,paddingHorizontal:5}}>
-       <AppText style={{color:'#F06B72',fontWeight:'900',fontSize:11,textAlign:'right'}}>{cell(pe?.ltp,2)}  |  {cell(pe?.oi)}  |  {cell(pe?.oi_change)}  |  {cell(pe?.volume)}  |  {cell(pe?.iv,1)}  |  {cell(pe?.delta,2)}</AppText>
-      </TouchableOpacity>
-     </View>;
-    }):<AppText style={s.settingDesc}>{optionChainStatus==='error'?'FYERS option chain unavailable.':'Waiting for complete verified option-chain data.'}</AppText>}
-   </View>
-  </ScrollView>
-  <AppText style={s.settingDesc}>Columns: LTP, OI, OI change, Volume, IV and Delta. Missing FYERS fields display as --. Scroll horizontally if needed.</AppText>
+  <View style={{flexDirection:'row',alignItems:'center',backgroundColor:card,borderRadius:10,padding:4,marginBottom:12}}>
+   {['LTP','OI','GREEKS'].map(tab=><TouchableOpacity key={tab} onPress={()=>setScalpChainTab(tab)} style={{flex:1,alignItems:'center',paddingVertical:10,borderRadius:8,backgroundColor:scalpChainTab===tab?accent:'transparent'}}><AppText style={{fontWeight:'800',fontSize:12,color:scalpChainTab===tab?'#07111F':fg}}>{tab}</AppText></TouchableOpacity>)}
+  </View>
+  <View style={{flexDirection:'row',backgroundColor:card,paddingVertical:11,borderBottomWidth:1,borderColor:'#77847744'}}>
+   <View style={{flex:1,alignItems:'center'}}><AppText style={{fontSize:12,fontWeight:'900',color:'#25B9A8'}}>CALL {scalpChainTab==='LTP'?'LTP':scalpChainTab==='OI'?'OI':'GREEKS'}</AppText></View>
+   <View style={{width:88,alignItems:'center'}}><AppText style={{fontSize:12,fontWeight:'900',color:fg}}>STRIKE</AppText></View>
+   <View style={{flex:1,alignItems:'center'}}><AppText style={{fontSize:12,fontWeight:'900',color:'#F06B72'}}>PUT {scalpChainTab==='LTP'?'LTP':scalpChainTab==='OI'?'OI':'GREEKS'}</AppText></View>
+  </View>
+  {optionNearby.length?optionNearby.map(strike=>{
+   const ce=optionRows.find(x=>x.strike_price===strike&&x.option_type==='CE');
+   const pe=optionRows.find(x=>x.strike_price===strike&&x.option_type==='PE');
+   const selected=Number(scalpStrike)===strike;
+   const itmCall=Number(optionSpot)>strike, itmPut=Number(optionSpot)<strike;
+   const main=(row)=>scalpChainTab==='LTP'?optionFmt(row?.ltp,2):scalpChainTab==='OI'?optionFmt(row?.oi):'Δ '+optionFmt(row?.delta,3)+'  Γ '+optionFmt(row?.gamma,4);
+   const sub=(row)=>scalpChainTab==='LTP'?'OI '+optionFmt(row?.oi)+'  OI Δ '+optionFmt(row?.oi_change):scalpChainTab==='OI'?'OI Δ '+optionFmt(row?.oi_change)+'  VOL '+optionFmt(row?.volume):'IV '+optionFmt(row?.iv,2)+'  Θ '+optionFmt(row?.theta,3)+'  Vega '+optionFmt(row?.vega,3);
+   return <View key={strike} style={{flexDirection:'row',minHeight:66,borderBottomWidth:1,borderColor:'#77847730',backgroundColor:selected?accent+'18':'transparent'}}>
+    <TouchableOpacity onPress={()=>{setScalpType('CE');setScalpStrike(strike);}} style={{flex:1,alignItems:'center',justifyContent:'center',paddingVertical:9,backgroundColor:itmCall?'#8C785522':'transparent',borderRightWidth:1,borderColor:'#77847722'}}>
+     <AppText style={{fontSize:15,fontWeight:'900',color:'#25B9A8'}}>{main(ce)}</AppText>
+     <AppText style={{fontSize:10,color:muted,marginTop:3}}>{sub(ce)}</AppText>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={()=>setScalpStrike(strike)} style={{width:88,alignItems:'center',justifyContent:'center',backgroundColor:selected?accent+'20':card,borderRightWidth:1,borderLeftWidth:1,borderColor:'#77847722'}}>
+     <AppText style={{fontSize:15,fontWeight:'900',color:selected?accent:fg}}>{optionFmt(strike)}{selected?' ✓':''}</AppText>
+     {strike===optionAtm?<AppText style={{fontSize:9,color:accent,fontWeight:'900'}}>ATM</AppText>:null}
+    </TouchableOpacity>
+    <TouchableOpacity onPress={()=>{setScalpType('PE');setScalpStrike(strike);}} style={{flex:1,alignItems:'center',justifyContent:'center',paddingVertical:9,backgroundColor:itmPut?'#8C785522':'transparent',borderLeftWidth:1,borderColor:'#77847722'}}>
+     <AppText style={{fontSize:15,fontWeight:'900',color:'#F06B72'}}>{main(pe)}</AppText>
+     <AppText style={{fontSize:10,color:muted,marginTop:3}}>{sub(pe)}</AppText>
+    </TouchableOpacity>
+   </View>;
+  }):<AppText style={[s.settingDesc,{paddingVertical:18,textAlign:'center'}]}>{optionChainStatus==='error'?'FYERS option chain unavailable.':'Waiting for verified option-chain data.'}</AppText>}
+  <View style={{flexDirection:'row',justifyContent:'space-between',paddingTop:12}}>
+   <AppText style={s.settingDesc}>ATM {optionFmt(optionAtm)} • PCR {optionFmt(optionSummary.pcr,3)}</AppText>
+   <AppText style={s.settingDesc}>Max Pain {optionFmt(optionSummary.max_pain)}</AppText>
+  </View>
+  <AppText style={s.settingDesc}>Tap Call or Put value to select its strike and side. All strikes returned by FYERS are shown. Missing data remains --.</AppText>
  </Card>
  <Card title="AI SMART DECISION" extra={<AppText style={scalpDataReady?s.green:s.accent}>{scalpDataReady?'LIVE INPUTS':'WAITING FOR DATA'}</AppText>}>
   <AppText style={{fontSize:27,fontWeight:'900',color:scalpSignal==='BUY CE'?green:scalpSignal==='BUY PE'?'#F06B72':accent,textAlign:'center',paddingVertical:12}}>{scalpSignal}</AppText>
