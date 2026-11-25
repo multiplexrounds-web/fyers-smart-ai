@@ -93,6 +93,22 @@ export default function App(){
  const optionDominance=optionCallOI===0&&optionPutOI===0?'--':optionPutOI>optionCallOI?'PE OI DOMINANT':optionCallOI>optionPutOI?'CE OI DOMINANT':'BALANCED';
  const scalpContract=optionRows.find(x=>x.strike_price===Number(scalpStrike)&&x.option_type===scalpType)||null;
  const scalpGreeks=['delta','gamma','theta','vega','iv'].every(k=>scalpContract?.[k]!==null&&scalpContract?.[k]!==undefined&&Number.isFinite(Number(scalpContract[k])));
+
+
+ const [marketQuotes,setMarketQuotes]=useState({});
+ const [quoteStatus,setQuoteStatus]=useState('connecting');
+
+ const [analysisResolution,setAnalysisResolution]=useState('5');
+ const [marketAnalysis,setMarketAnalysis]=useState(null);
+ const [analysisStatus,setAnalysisStatus]=useState('connecting');
+ const analysisSymbols={'NIFTY':'NSE:NIFTY50-INDEX','BANKNIFTY':'NSE:NIFTYBANK-INDEX','FINNIFTY':'NSE:FINNIFTY-INDEX','SENSEX':'BSE:SENSEX-INDEX'};
+ const analysisSymbol=analysisSymbols[selectedIndex];
+ const analysisIndicators=marketAnalysis?.indicators||{};
+ const showMetric=(value,digits=2)=>value===null||value===undefined?'--':typeof value==='number'?value.toFixed(digits):String(value);
+ const aiAnalysis=marketAnalysis?.ai_analysis||{};
+ const aiReady=analysisStatus==='live'&&aiAnalysis.status==='live';
+ const riskScore=aiReady&&aiAnalysis.risk_score!==null&&aiAnalysis.risk_score!==undefined&&Number.isFinite(Number(aiAnalysis.risk_score))?Math.max(0,Math.min(100,Number(aiAnalysis.risk_score))):null;
+ const riskLevel=riskScore===null?'Awaiting data':aiRiskLevel(riskScore);
  const scalpCandles=marketAnalysis?.candles||[];
  const scalpLast=scalpCandles[scalpCandles.length-1]||null;
  const scalpPrev=scalpCandles[scalpCandles.length-2]||null;
@@ -115,21 +131,6 @@ export default function App(){
  const scalpPremiumEntry=Number(scalpContract?.ltp)>0?Number(scalpContract.ltp):null;
  const scalpPremiumTarget=scalpPremiumEntry!==null&&scalpSignal!=='WAIT'?scalpPremiumEntry+25:null;
  const scalpPremiumStop=scalpPremiumEntry!==null&&scalpSignal!=='WAIT'?Math.max(0,scalpPremiumEntry-12.5):null;
-
- const [marketQuotes,setMarketQuotes]=useState({});
- const [quoteStatus,setQuoteStatus]=useState('connecting');
-
- const [analysisResolution,setAnalysisResolution]=useState('5');
- const [marketAnalysis,setMarketAnalysis]=useState(null);
- const [analysisStatus,setAnalysisStatus]=useState('connecting');
- const analysisSymbols={'NIFTY':'NSE:NIFTY50-INDEX','BANKNIFTY':'NSE:NIFTYBANK-INDEX','FINNIFTY':'NSE:FINNIFTY-INDEX','SENSEX':'BSE:SENSEX-INDEX'};
- const analysisSymbol=analysisSymbols[selectedIndex];
- const analysisIndicators=marketAnalysis?.indicators||{};
- const showMetric=(value,digits=2)=>value===null||value===undefined?'--':typeof value==='number'?value.toFixed(digits):String(value);
- const aiAnalysis=marketAnalysis?.ai_analysis||{};
- const aiReady=analysisStatus==='live'&&aiAnalysis.status==='live';
- const riskScore=aiReady&&aiAnalysis.risk_score!==null&&aiAnalysis.risk_score!==undefined&&Number.isFinite(Number(aiAnalysis.risk_score))?Math.max(0,Math.min(100,Number(aiAnalysis.risk_score))):null;
- const riskLevel=riskScore===null?'Awaiting data':aiRiskLevel(riskScore);
  const riskCandles=marketAnalysis?.candles||[];
  const currentPrice=Number(riskCandles[riskCandles.length-1]?.close);
  const emaSpread=Number.isFinite(currentPrice)&&currentPrice>0&&Number.isFinite(Number(analysisIndicators.ema20))&&Number.isFinite(Number(analysisIndicators.ema50))?Math.abs(Number(analysisIndicators.ema20)-Number(analysisIndicators.ema50))/currentPrice*100:null;
@@ -302,7 +303,7 @@ export default function App(){
   <Row label="Execution mode" value="READ ONLY • DISABLED"/>
   <AppText style={s.settingDesc}>No broker orders, auto-trading or order placement are implemented. Historical backtesting and paper-trading validation are required before relying on this heuristic engine.</AppText>
  </Card>
- </>::page==='watchlist'?<><Card title="MY WATCHLIST"><AppText style={s.settingDesc}>Add instruments to follow them here. Live quotes appear only after verified FYERS data is connected.</AppText>{['NIFTY 50','BANK NIFTY','SENSEX'].map(x=><Row key={x} label={x} value="--"/>)}</Card></>:page==='technical'?<><Card title="TECHNICAL ANALYSIS"><Row label="RSI (14)" value={showMetric(analysisIndicators.rsi14)}/><Row label="MACD" value={showMetric(analysisIndicators.macd,4)}/><Row label="MACD Signal" value={showMetric(analysisIndicators.macd_signal,4)}/><Row label="VWAP" value={showMetric(analysisIndicators.vwap)}/><Row label="EMA 20" value={showMetric(analysisIndicators.ema20)}/><Row label="EMA 50" value={showMetric(analysisIndicators.ema50)}/><Row label="Volume" value={showMetric(analysisIndicators.volume,0)}/><Row label="Supertrend" value="-- (not calculated)"/></Card></>:page==='support'?<><Card title="SUPPORT & RESISTANCE"><Row label="Resistance" value={showMetric(analysisIndicators.resistance)}/><Row label="Support" value={showMetric(analysisIndicators.support)}/><AppText style={s.settingDesc}>Calculated from the latest verified FYERS candles for {selectedIndex}.</AppText></Card></>:page==='risk'?<><Card title="VGROW • RISK GAUGE"><RiskGauge fg={fg} muted={muted} score={riskScore} status={aiReady?'live':'pending'}/><View style={{height:1,backgroundColor:accent+'35',marginVertical:12}}/><Row label="Current market risk" value={riskScore===null?'--':Math.round(riskScore)+'/100'}/><Row label="Volatility risk" value={riskScore===null?'--':riskLevel}/><Row label="Trend strength" value={trendStability===null?'--':trendStability+'/100'}/><Row label="Risk category" value={riskLevel}/></Card><Card title="RISK BREAKDOWN"><Row label="Price volatility risk" value={riskScore===null?'--':Math.round(riskScore)+'/100'}/><Row label="Trend stability score" value={trendStability===null?'--':trendStability+'/100'}/><Row label="Momentum intensity" value={momentumScore===null?'--':momentumScore+'/100'}/><AppText style={s.settingDesc}>Calculated from verified FYERS candles for {selectedIndex}. Trend stability uses EMA 20/50 spread; momentum uses RSI 14. Values remain pending when source data is unavailable.</AppText></Card></>:page==='options'?<>
+ </>:page==='watchlist'?<><Card title="MY WATCHLIST"><AppText style={s.settingDesc}>Add instruments to follow them here. Live quotes appear only after verified FYERS data is connected.</AppText>{['NIFTY 50','BANK NIFTY','SENSEX'].map(x=><Row key={x} label={x} value="--"/>)}</Card></>:page==='technical'?<><Card title="TECHNICAL ANALYSIS"><Row label="RSI (14)" value={showMetric(analysisIndicators.rsi14)}/><Row label="MACD" value={showMetric(analysisIndicators.macd,4)}/><Row label="MACD Signal" value={showMetric(analysisIndicators.macd_signal,4)}/><Row label="VWAP" value={showMetric(analysisIndicators.vwap)}/><Row label="EMA 20" value={showMetric(analysisIndicators.ema20)}/><Row label="EMA 50" value={showMetric(analysisIndicators.ema50)}/><Row label="Volume" value={showMetric(analysisIndicators.volume,0)}/><Row label="Supertrend" value="-- (not calculated)"/></Card></>:page==='support'?<><Card title="SUPPORT & RESISTANCE"><Row label="Resistance" value={showMetric(analysisIndicators.resistance)}/><Row label="Support" value={showMetric(analysisIndicators.support)}/><AppText style={s.settingDesc}>Calculated from the latest verified FYERS candles for {selectedIndex}.</AppText></Card></>:page==='risk'?<><Card title="VGROW • RISK GAUGE"><RiskGauge fg={fg} muted={muted} score={riskScore} status={aiReady?'live':'pending'}/><View style={{height:1,backgroundColor:accent+'35',marginVertical:12}}/><Row label="Current market risk" value={riskScore===null?'--':Math.round(riskScore)+'/100'}/><Row label="Volatility risk" value={riskScore===null?'--':riskLevel}/><Row label="Trend strength" value={trendStability===null?'--':trendStability+'/100'}/><Row label="Risk category" value={riskLevel}/></Card><Card title="RISK BREAKDOWN"><Row label="Price volatility risk" value={riskScore===null?'--':Math.round(riskScore)+'/100'}/><Row label="Trend stability score" value={trendStability===null?'--':trendStability+'/100'}/><Row label="Momentum intensity" value={momentumScore===null?'--':momentumScore+'/100'}/><AppText style={s.settingDesc}>Calculated from verified FYERS candles for {selectedIndex}. Trend stability uses EMA 20/50 spread; momentum uses RSI 14. Values remain pending when source data is unavailable.</AppText></Card></>:page==='options'?<>
  <Card title="AI OPTION CHAIN ANALYZER" extra={<AppText style={optionChainStatus==='live'?s.green:s.accent}>{optionChainStatus==='live'?'● FYERS LIVE':optionChainStatus==='error'?'● FEED ERROR':'● '+optionChainStatus.toUpperCase()}</AppText>}>
   <AppText style={s.settingDesc}>AI-powered options intelligence • Read-only • No order execution</AppText>
   <View style={[s.split,{marginTop:7}]}><AppText style={s.rowLabel}>SELECTED INDEX</AppText><AppText style={s.accent}>{selectedIndex}</AppText></View>
