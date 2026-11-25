@@ -243,65 +243,89 @@ export default function App(){
 <Card title="RISK METER"><Row label="Current risk" value={aiReady?aiValue(aiAnalysis.risk_level):'NOT AVAILABLE'}/><View style={s.barTrack}><View style={[s.barFill,{width:aiReady?Math.min(100,Number(aiAnalysis.risk_score)||0)+'%':'0%'}]}/></View></Card>
 <Card title="TECHNICAL SIGNALS"><Row label="RSI" value={showMetric(analysisIndicators.rsi14)}/><Row label="MACD" value={showMetric(analysisIndicators.macd,4)}/><Row label="VWAP" value={showMetric(analysisIndicators.vwap)}/><Row label="EMA 20 / 50" value={showMetric(analysisIndicators.ema20)+' / '+showMetric(analysisIndicators.ema50)}/><Row label="Volume" value={showMetric(analysisIndicators.volume,0)}/></Card>
  </>:page==='scalping'?<>
- <Card title="AI SMART SCALPING ENGINE" extra={<AppText style={scalpDataReady?s.green:s.accent}>{scalpDataReady?'LIVE ANALYSIS':'DATA / GREEKS PENDING'}</AppText>}>
-  <AppText style={s.settingDesc}>Manual strike selection • Index + option premium targets • Verified FYERS data only • Read-only</AppText>
-  <Row label="Selected index" value={selectedIndex}/>
-  <Row label="Underlying spot" value={showMetric(scalpSpot)}/>
-  <Row label="Option-chain feed" value={optionChainStatus.toUpperCase()}/>
-  <Row label="Candle analysis" value={analysisStatus.toUpperCase()}/>
+ <Card title="AI SMART SCALPING" extra={<AppText style={optionChainStatus==='live'&&aiReady?s.green:s.accent}>{optionChainStatus==='live'&&aiReady?'● LIVE':'● WAITING'}</AppText>}>
+  <View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingVertical:8}}>
+   <View style={{flex:1}}><AppText style={{fontSize:19,fontWeight:'900',color:fg}}>AI Smart Scalping</AppText><AppText style={s.settingDesc}>Smart AI • Live Analysis • Manual Strike</AppText></View>
+   <View style={{backgroundColor:card,borderRadius:12,padding:10,borderWidth:1,borderColor:accent+'66'}}><AppText style={{fontSize:11,color:green,fontWeight:'900'}}>● {quoteStatus==='live'?'LIVE':'DATA STATUS'}</AppText><AppText style={{fontSize:17,color:fg,fontWeight:'900'}}>{selectedIndex}</AppText><AppText style={{fontSize:12,color:fg}}>{showMetric(scalpSpot)}</AppText></View>
+  </View>
+  <Row label="Option chain" value={optionChainStatus==='live'?'FYERS LIVE':optionChainStatus.toUpperCase()}/>
+  <Row label="Nearest expiry" value={String(optionExpiry)}/>
+  <Row label="PCR / Max Pain" value={optionFmt(optionSummary.pcr,3)+' / '+optionFmt(optionSummary.max_pain)}/>
  </Card>
- <Card title="1 • MANUAL CONTRACT SELECTION">
+ <Card title="SELECT CONTRACT • MANUAL SELECTION">
   <AppText style={s.eyebrow}>OPTION TYPE</AppText>
-  <View style={s.wrap}>{['CE','PE'].map(x=><TouchableOpacity key={x} onPress={()=>setScalpType(x)} style={[s.chip,{borderColor:scalpType===x?accent:'#77847766',backgroundColor:scalpType===x?accent+'20':'transparent'}]}><AppText style={[s.chipText,{color:scalpType===x?accent:fg}]}>{x}{scalpType===x?' ✓':''}</AppText></TouchableOpacity>)}</View>
-  <AppText style={s.eyebrow}>AVAILABLE STRIKES • YOU SELECT</AppText>
-  <View style={s.wrap}>{optionNearby.map(k=><TouchableOpacity key={k} onPress={()=>setScalpStrike(k)} style={[s.chip,{borderColor:Number(scalpStrike)===k?accent:'#77847766',backgroundColor:Number(scalpStrike)===k?accent+'20':'transparent'}]}><AppText style={[s.chipText,{color:Number(scalpStrike)===k?accent:fg}]}>{optionFmt(k)}{Number(scalpStrike)===k?' ✓':''}</AppText></TouchableOpacity>)}</View>
-  <Row label="Selected contract" value={scalpContract?optionFmt(scalpContract.strike_price)+' '+scalpType:'Select a strike'}/>
-  <Row label="Option premium (LTP)" value={scalpContract?showMetric(scalpContract.ltp):'--'}/>
-  <Row label="Contract OI / OI change" value={scalpContract?optionFmt(scalpContract.oi)+' / '+optionFmt(scalpContract.oi_change):'--'}/>
-  <Row label="Contract volume" value={scalpContract?optionFmt(scalpContract.volume):'--'}/>
+  <View style={s.wrap}>{['CE','PE'].map(x=><TouchableOpacity key={x} onPress={()=>setScalpType(x)} style={[s.chip,{minWidth:92,alignItems:'center',borderColor:scalpType===x?accent:'#77847766',backgroundColor:scalpType===x?accent+'28':'transparent'}]}><AppText style={[s.chipText,{fontSize:14,color:scalpType===x?accent:fg}]}>{x}{scalpType===x?' ✓':''}</AppText></TouchableOpacity>)}</View>
+  <AppText style={s.eyebrow}>SELECT STRIKE FROM COMPLETE OPTION CHAIN</AppText>
+  <View style={s.wrap}>{optionNearby.map(k=><TouchableOpacity key={k} onPress={()=>setScalpStrike(k)} style={[s.chip,{borderColor:Number(scalpStrike)===k?accent:'#77847766',backgroundColor:Number(scalpStrike)===k?accent+'28':'transparent'}]}><AppText style={[s.chipText,{color:Number(scalpStrike)===k?accent:fg}]}>{optionFmt(k)}{Number(scalpStrike)===k?' ✓':''}</AppText></TouchableOpacity>)}</View>
+  <Row label="Selected contract" value={scalpContract?optionFmt(scalpContract.strike_price)+' '+scalpType:'Choose CE/PE and strike'}/>
+  <Row label="Entry premium (LTP)" value={showMetric(scalpContract?.ltp)}/>
  </Card>
- <Card title="2 • TECHNICAL + PRICE ACTION">
-  <Row label="EMA 20 / EMA 50" value={showMetric(analysisIndicators.ema20)+' / '+showMetric(analysisIndicators.ema50)}/>
-  <Row label="RSI 14" value={showMetric(analysisIndicators.rsi14)}/>
-  <Row label="MACD / Signal" value={showMetric(analysisIndicators.macd,4)+' / '+showMetric(analysisIndicators.macd_signal,4)}/>
-  <Row label="VWAP" value={showMetric(analysisIndicators.vwap)}/>
-  <Row label="Breakout / breakdown" value={aiReady?aiValue(aiAnalysis.breakout_status):'WAITING'}/>
-  <Row label="Relative candle volume" value={scalpRelVolume===null?'--':scalpRelVolume.toFixed(2)+'x'}/>
+ <Card title={'COMPLETE OPTION CHAIN • '+selectedIndex} extra={<AppText style={optionChainStatus==='live'?s.green:s.accent}>{optionChainStatus==='live'?'● FYERS LIVE':'● '+optionChainStatus.toUpperCase()}</AppText>}>
+  <View style={s.marketGrid}>
+   {[{a:'PCR',v:optionFmt(optionSummary.pcr,3)},{a:'MAX PAIN',v:optionFmt(optionSummary.max_pain)},{a:'SPOT',v:optionFmt(optionSpot,2)}].map(x=><View key={x.a} style={[s.marketCard,{width:'31%',minHeight:62}]}><AppText style={s.marketName}>{x.a}</AppText><AppText style={[s.marketValue,{fontSize:15}]}>{x.v}</AppText></View>)}
+  </View>
+  <AppText style={[s.settingDesc,{marginBottom:8}]}>Tap any CE or PE row to select its strike. All values are sourced from the existing FYERS option-chain feed.</AppText>
+  <ScrollView horizontal showsHorizontalScrollIndicator>
+   <View>
+    <View style={{flexDirection:'row',backgroundColor:'#10234A',paddingVertical:8}}>
+     {['CALLS • CE','STRIKE','PUTS • PE'].map((x,i)=><View key={x} style={{width:i===1?88:300,alignItems:'center'}}><AppText style={{color:i===0?'#20C779':i===2?'#F06B72':fg,fontWeight:'900',fontSize:12}}>{x}</AppText></View>)}
+    </View>
+    <View style={{flexDirection:'row',backgroundColor:card,paddingVertical:6}}>
+     {['LTP | OI | OI Δ | VOL | IV | Δ','STRIKE','LTP | OI | OI Δ | VOL | IV | Δ'].map((x,i)=><View key={i} style={{width:i===1?88:300,alignItems:'center'}}><AppText style={s.chartCaption}>{x}</AppText></View>)}
+    </View>
+    {optionNearby.length?optionNearby.map(strike=>{
+     const ce=optionRows.find(x=>x.strike_price===strike&&x.option_type==='CE');
+     const pe=optionRows.find(x=>x.strike_price===strike&&x.option_type==='PE');
+     const selected=Number(scalpStrike)===strike;
+     const cell=(v,d=0)=>optionFmt(v,d);
+     return <View key={strike} style={{flexDirection:'row',borderBottomWidth:1,borderBottomColor:'#77847735',backgroundColor:selected?accent+'18':'transparent',alignItems:'stretch'}}>
+      <TouchableOpacity onPress={()=>{setScalpType('CE');setScalpStrike(strike);}} style={{width:300,paddingVertical:9,paddingHorizontal:5,borderRightWidth:1,borderColor:'#77847730'}}>
+       <AppText style={{color:'#20C779',fontWeight:'900',fontSize:11}}>{cell(ce?.ltp,2)}  |  {cell(ce?.oi)}  |  {cell(ce?.oi_change)}  |  {cell(ce?.volume)}  |  {cell(ce?.iv,1)}  |  {cell(ce?.delta,2)}</AppText>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={()=>setScalpStrike(strike)} style={{width:88,alignItems:'center',justifyContent:'center',borderRightWidth:1,borderColor:'#77847730'}}>
+       <AppText style={{fontWeight:'900',fontSize:12,color:selected?accent:fg}}>{cell(strike)}{selected?' ✓':''}</AppText>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={()=>{setScalpType('PE');setScalpStrike(strike);}} style={{width:300,paddingVertical:9,paddingHorizontal:5}}>
+       <AppText style={{color:'#F06B72',fontWeight:'900',fontSize:11,textAlign:'right'}}>{cell(pe?.ltp,2)}  |  {cell(pe?.oi)}  |  {cell(pe?.oi_change)}  |  {cell(pe?.volume)}  |  {cell(pe?.iv,1)}  |  {cell(pe?.delta,2)}</AppText>
+      </TouchableOpacity>
+     </View>;
+    }):<AppText style={s.settingDesc}>{optionChainStatus==='error'?'FYERS option chain unavailable.':'Waiting for complete verified option-chain data.'}</AppText>}
+   </View>
+  </ScrollView>
+  <AppText style={s.settingDesc}>Columns: LTP, OI, OI change, Volume, IV and Delta. Missing FYERS fields display as --. Scroll horizontally if needed.</AppText>
  </Card>
- <Card title="3 • OI + IV + OPTION GREEKS">
-  <Row label="OI / Change in OI" value={scalpContract?optionFmt(scalpContract.oi)+' / '+optionFmt(scalpContract.oi_change):'--'}/>
-  <Row label="Implied volatility" value={showMetric(scalpContract?.iv)}/>
-  <Row label="Delta" value={showMetric(scalpContract?.delta,4)}/>
-  <Row label="Gamma" value={showMetric(scalpContract?.gamma,6)}/>
-  <Row label="Theta" value={showMetric(scalpContract?.theta,4)}/>
-  <Row label="Vega" value={showMetric(scalpContract?.vega,4)}/>
-  <Row label="Greeks status" value={scalpGreeks?'VERIFIED FIELDS AVAILABLE':'MISSING • WAIT'}/>
-  <AppText style={s.settingDesc}>Greeks are displayed only when supplied by FYERS. Missing Greeks are never estimated or fabricated.</AppText>
- </Card>
- <Card title="4 • FINAL AI DECISION" extra={<AppText style={scalpDataReady?s.green:s.accent}>{scalpDataReady?'LIVE INPUTS':'WAITING'}</AppText>}>
-  <AppText style={{fontSize:29,fontWeight:'900',color:scalpSignal==='BUY CE'?green:scalpSignal==='BUY PE'?'#F06B72':accent,textAlign:'center',paddingVertical:12}}>{scalpSignal}</AppText>
+ <Card title="AI SMART DECISION" extra={<AppText style={scalpDataReady?s.green:s.accent}>{scalpDataReady?'LIVE INPUTS':'WAITING FOR DATA'}</AppText>}>
+  <AppText style={{fontSize:27,fontWeight:'900',color:scalpSignal==='BUY CE'?green:scalpSignal==='BUY PE'?'#F06B72':accent,textAlign:'center',paddingVertical:12}}>{scalpSignal}</AppText>
+  <Row label="Selected contract" value={scalpContract?optionFmt(scalpContract.strike_price)+' '+scalpType:'--'}/>
   <Row label="Rule score (not win probability)" value={scalpDataReady?scalpScore+'/100':'--'}/>
-  <Row label="Bullish rule score" value={scalpDataReady?scalpBullScore+'/100':'--'}/>
-  <Row label="Bearish rule score" value={scalpDataReady?scalpBearScore+'/100':'--'}/>
+  <Row label="Market sentiment" value={aiReady?aiValue(aiAnalysis.market_bias):'WAITING'}/>
+  <Row label="Risk" value={riskScore===null?'--':riskScore+'/100 • '+riskLevel}/>
   <Row label="Reason" value={scalpSignalReason}/>
-  <AppText style={s.settingDesc}>BUY is shown only when all required live fields are available, the selected CE/PE side matches direction, risk is below 65 and rule score is at least 75. Otherwise WAIT.</AppText>
  </Card>
- <Card title="5 • INDEX + OPTION PREMIUM PLAN">
-  <Row label="Index entry (spot)" value={scalpSignal==='WAIT'?'--':showMetric(scalpSpot)}/>
-  <Row label="Index target (25-point plan)" value={scalpIndexTarget===null?'--':showMetric(scalpIndexTarget)}/>
-  <Row label="Index stop reference (12.5 points)" value={scalpIndexStop===null?'--':showMetric(scalpIndexStop)}/>
-  <Row label="Option entry (selected LTP)" value={scalpSignal==='WAIT'?'--':showMetric(scalpPremiumEntry)}/>
-  <Row label="Option premium target (+25 points)" value={scalpPremiumTarget===null?'--':showMetric(scalpPremiumTarget)}/>
-  <Row label="Option premium stop (-12.5 points)" value={scalpPremiumStop===null?'--':showMetric(scalpPremiumStop)}/>
-  <AppText style={s.settingDesc}>Illustrative fixed-point plan. These levels are rule references, not guaranteed fills or profit. Validate slippage, liquidity and contract lot size before any independent decision.</AppText>
+ <Card title="INDEX TARGET / STOP LOSS">
+  <Row label="Index entry" value={showMetric(scalpSpot)}/>
+  <Row label="Index target (25 points)" value={scalpIndexTarget===null?'--':showMetric(scalpIndexTarget)}/>
+  <Row label="Index stop loss (12.5 points)" value={scalpIndexStop===null?'--':showMetric(scalpIndexStop)}/>
  </Card>
- <Card title="6 • SIGNAL QUALITY & SAFETY">
-  <Row label="Market risk" value={riskScore===null?'--':riskScore+'/100 • '+riskLevel}/>
-  <Row label="Option Greeks" value={scalpGreeks?'Available':'Unavailable'}/>
-  <Row label="Relative volume ≥ 1x" value={scalpVolumeReady?'PASS':'WAIT'}/>
-  <Row label="OI data" value={scalpOiReady?'PASS':'WAIT'}/>
-  <Row label="Execution mode" value="READ ONLY • DISABLED"/>
-  <AppText style={s.settingDesc}>No broker orders, auto-trading or order placement are implemented. Historical backtesting and paper-trading validation are required before relying on this heuristic engine.</AppText>
+ <Card title="OPTION PREMIUM TARGET / STOP LOSS">
+  <Row label="Option entry" value={showMetric(scalpPremiumEntry)}/>
+  <Row label="Premium target (+25)" value={scalpPremiumTarget===null?'--':showMetric(scalpPremiumTarget)}/>
+  <Row label="Premium stop loss (-12.5)" value={scalpPremiumStop===null?'--':showMetric(scalpPremiumStop)}/>
+ </Card>
+ <Card title="TECHNICAL + OPTION GREEKS">
+  <Row label="EMA 20 / EMA 50" value={showMetric(analysisIndicators.ema20)+' / '+showMetric(analysisIndicators.ema50)}/>
+  <Row label="RSI / MACD" value={showMetric(analysisIndicators.rsi14)+' / '+showMetric(analysisIndicators.macd,4)}/>
+  <Row label="VWAP / Breakout" value={showMetric(analysisIndicators.vwap)+' / '+(aiReady?aiValue(aiAnalysis.breakout_status):'WAITING')}/>
+  <Row label="IV / Delta" value={showMetric(scalpContract?.iv)+' / '+showMetric(scalpContract?.delta,4)}/>
+  <Row label="Gamma / Theta / Vega" value={showMetric(scalpContract?.gamma,5)+' / '+showMetric(scalpContract?.theta,4)+' / '+showMetric(scalpContract?.vega,4)}/>
+  <Row label="OI / OI change / Volume" value={scalpContract?optionFmt(scalpContract.oi)+' / '+optionFmt(scalpContract.oi_change)+' / '+optionFmt(scalpContract.volume):'--'}/>
+  <Row label="Greeks availability" value={scalpGreeks?'Available from FYERS':'Missing • WAIT'}/>
+  <AppText style={s.settingDesc}>No synthetic market values. If live data or required Greeks are missing, the AI decision remains WAIT.</AppText>
+ </Card>
+ <Card title="READ ONLY • SAFETY">
+  <Row label="Order execution" value="DISABLED"/>
+  <Row label="Data source" value="Existing FYERS feed only"/>
+  <AppText style={s.settingDesc}>Targets are illustrative reference levels, not guaranteed fills or returns. This section does not place orders.</AppText>
  </Card>
  </>:page==='watchlist'?<><Card title="MY WATCHLIST"><AppText style={s.settingDesc}>Add instruments to follow them here. Live quotes appear only after verified FYERS data is connected.</AppText>{['NIFTY 50','BANK NIFTY','SENSEX'].map(x=><Row key={x} label={x} value="--"/>)}</Card></>:page==='technical'?<><Card title="TECHNICAL ANALYSIS"><Row label="RSI (14)" value={showMetric(analysisIndicators.rsi14)}/><Row label="MACD" value={showMetric(analysisIndicators.macd,4)}/><Row label="MACD Signal" value={showMetric(analysisIndicators.macd_signal,4)}/><Row label="VWAP" value={showMetric(analysisIndicators.vwap)}/><Row label="EMA 20" value={showMetric(analysisIndicators.ema20)}/><Row label="EMA 50" value={showMetric(analysisIndicators.ema50)}/><Row label="Volume" value={showMetric(analysisIndicators.volume,0)}/><Row label="Supertrend" value="-- (not calculated)"/></Card></>:page==='support'?<><Card title="SUPPORT & RESISTANCE"><Row label="Resistance" value={showMetric(analysisIndicators.resistance)}/><Row label="Support" value={showMetric(analysisIndicators.support)}/><AppText style={s.settingDesc}>Calculated from the latest verified FYERS candles for {selectedIndex}.</AppText></Card></>:page==='risk'?<><Card title="VGROW • RISK GAUGE"><RiskGauge fg={fg} muted={muted} score={riskScore} status={aiReady?'live':'pending'}/><View style={{height:1,backgroundColor:accent+'35',marginVertical:12}}/><Row label="Current market risk" value={riskScore===null?'--':Math.round(riskScore)+'/100'}/><Row label="Volatility risk" value={riskScore===null?'--':riskLevel}/><Row label="Trend strength" value={trendStability===null?'--':trendStability+'/100'}/><Row label="Risk category" value={riskLevel}/></Card><Card title="RISK BREAKDOWN"><Row label="Price volatility risk" value={riskScore===null?'--':Math.round(riskScore)+'/100'}/><Row label="Trend stability score" value={trendStability===null?'--':trendStability+'/100'}/><Row label="Momentum intensity" value={momentumScore===null?'--':momentumScore+'/100'}/><AppText style={s.settingDesc}>Calculated from verified FYERS candles for {selectedIndex}. Trend stability uses EMA 20/50 spread; momentum uses RSI 14. Values remain pending when source data is unavailable.</AppText></Card></>:page==='options'?<>
  <Card title="AI OPTION CHAIN ANALYZER" extra={<AppText style={optionChainStatus==='live'?s.green:s.accent}>{optionChainStatus==='live'?'● FYERS LIVE':optionChainStatus==='error'?'● FEED ERROR':'● '+optionChainStatus.toUpperCase()}</AppText>}>
