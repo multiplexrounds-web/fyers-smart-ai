@@ -3,7 +3,7 @@ import secrets
 import time
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fyers_apiv3 import fyersModel
 from data_validation import validate_candles
@@ -48,6 +48,22 @@ def home():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/decision/context")
+def decision_context(payload: dict = Body(...)):
+    """Read-only adapter: unify AI decisions using already-fetched market inputs."""
+    indicators = payload.get("indicators") or {}
+    validation = payload.get("data_validation") or {}
+    risk_score = payload.get("risk_score")
+    if validation and (validation.get("is_valid") is False or validation.get("is_fresh") is False):
+        risk_score = None
+    return build_decision_context(
+        indicators,
+        payload.get("market_bias"),
+        risk_score,
+        payload.get("option_pcr"),
+    )
 
 
 @app.get("/fyers/status")
