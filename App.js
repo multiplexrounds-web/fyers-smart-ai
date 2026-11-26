@@ -46,8 +46,8 @@ async function processMarketAlerts(index,analysis,quotes,optionChain,selectedStr
  const rows=chainLive?optionChain.options_chain:[];
  const pcr=Number(optionChain?.summary?.pcr);
  const risk=Number(ai.risk_score);
- const decisionResponse=await fetch('https://fyers-smart-ai-1.onrender.com/decision/context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({indicators:analysis?.shared_indicators||ind,market_bias:ai.market_bias,risk_score:risk,option_pcr:chainLive&&valid(pcr)?pcr:null,data_validation:analysis?.data_validation||null})});
- const decisionPayload=decisionResponse.ok?await decisionResponse.json():null;
+ let decisionPayload=null;
+ try{const decisionResponse=await fetch('https://fyers-smart-ai-1.onrender.com/decision/context',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({indicators:analysis?.shared_indicators||ind,market_bias:ai.market_bias,risk_score:risk,option_pcr:chainLive&&valid(pcr)?pcr:null,data_validation:analysis?.data_validation||null})});if(decisionResponse.ok)decisionPayload=await decisionResponse.json();}catch(e){}
  const tradeReady=chainLive&&valid(pcr)&&valid(risk)&&risk<65&&decisionPayload?.status==='ready';
  const trade=tradeReady?decisionPayload.smart_trade_signal:'WAIT';
  if(tradeReady)await notifyOnStateChange('trade',trade,'AI Smart Trade Decision',trade+' • '+index+' | PCR '+pcr.toFixed(2)+' | Risk '+Math.round(risk)+'/100',true);
@@ -149,6 +149,7 @@ const TXT=[
 {home:'होम',chart:'चार्ट',ai:'AI विश्लेषण',options:'ऑप्शन्स',settings:'सेटिंग्स',market:'लाइव मार्केट',pending:'लाइव भाव के लिए FYERS जोड़ें',sentiment:'मार्केट रुझान',support:'सपोर्ट और रेसिस्टेंस',indicators:'टेक्निकल इंडिकेटर्स',theme:'ऐप थीम',language:'ऐप भाषा',notify:'नोटिफिकेशन',finger:'फिंगरप्रिंट लॉक',ro:'केवल जानकारी  •  ऑर्डर बंद'}];
 export default function App(){
  const [page,setPage]=useState('home'),[theme,setTheme]=useState(0),[themeReady,setThemeReady]=useState(false),[lang,setLang]=useState(0),[time,setTime]=useState(new Date()),[notify,setNotify]=useState(false),[finger,setFinger]=useState(false),[selectedFont,setSelectedFont]=useState('Roboto'),[fontScale,setFontScale]=useState(1);
+ const [centralDecision,setCentralDecision]=useState(null);
  const [notifyPrefs,setNotifyPrefs]=useState({trade:true,breakout:true,option:true,levels:true,sentiment:true,scalping:true}),[notifySound,setNotifySound]=useState(true),[notifyVibration,setNotifyVibration]=useState(true);
  const [selectedIndex,setSelectedIndex]=useState('NIFTY');
  const [optionChain,setOptionChain]=useState(null);
@@ -215,10 +216,10 @@ export default function App(){
  const [analysisResolution,setAnalysisResolution]=useState('5');
  const [marketAnalysis,setMarketAnalysis]=useState(null);
  const [analysisStatus,setAnalysisStatus]=useState('connecting');
- const [centralDecision,setCentralDecision]=useState(null);
+
  const analysisSymbols={'NIFTY':'NSE:NIFTY50-INDEX','BANKNIFTY':'NSE:NIFTYBANK-INDEX','FINNIFTY':'NSE:FINNIFTY-INDEX','SENSEX':'BSE:SENSEX-INDEX'};
  const analysisSymbol=analysisSymbols[selectedIndex];
- const analysisIndicators=marketAnalysis?.indicators||{};
+ const analysisIndicators=marketAnalysis?.shared_indicators||marketAnalysis?.indicators||{};
  const showMetric=(value,digits=2)=>value===null||value===undefined?'--':typeof value==='number'?value.toFixed(digits):String(value);
  const aiAnalysis=marketAnalysis?.ai_analysis||{};
  const aiReady=analysisStatus==='live'&&aiAnalysis.status==='live';
