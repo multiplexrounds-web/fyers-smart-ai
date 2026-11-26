@@ -168,7 +168,7 @@ export default function App(){
  const optionSpot=optionChain?.underlying_value;
  const optionExpiry=optionChain?.expiry_data?.[0]?.date||optionChain?.expiry_data?.[0]?.expiry||'--';
  const optionAtm=optionSpot&&optionRows.length?optionRows.reduce((best,row)=>Math.abs(row.strike_price-optionSpot)<Math.abs(best-optionSpot)?row.strike_price:best,optionRows[0].strike_price):null;
- const optionNearby=optionAtm===null?[]:[...new Set(optionRows.map(x=>x.strike_price))].sort((x,y)=>x-y);
+ const optionNearby=[...new Set(optionRows.filter(x=>Number(x.strike_price)>0&&['CE','PE'].includes(x.option_type)).map(x=>x.strike_price))].sort((x,y)=>x-y);
  const optionFmt=(v,d=0)=>v===null||v===undefined?'--':Number(v).toLocaleString('en-IN',{maximumFractionDigits:d});
  const optionCallOI=Number(optionSummary.call_oi)||0,optionPutOI=Number(optionSummary.put_oi)||0;
  const optionTotalOI=optionCallOI+optionPutOI;
