@@ -6,6 +6,9 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fyers_apiv3 import fyersModel
+from data_validation import validate_candles
+from indicators import calculate_indicators
+from decision_engine import build_decision_context
 
 app = FastAPI(title="FYERS SMART AI - Read Only")
 
@@ -451,10 +454,17 @@ def market_analysis(
         bear_trap = last["low"] < recent_low and last["close"] > recent_low and lower_wick > candle_range * .3
         volatility = sum((c["high"]-c["low"])/max(c["close"],0.000001) for c in candles[-14:])/14
         risk_score = min(100, max(5, round(volatility * 10000)))
+        # Additive engine integration: consumes the existing candle payload only.
+        data_validation = validate_candles(candles, resolution)
+        shared_indicators = calculate_indicators(candles)
+        decision_context = build_decision_context(shared_indicators, bias, risk_score)
         return {
             "status": "live", "mode": "READ ONLY", "symbol": symbol,
             "resolution": resolution, "last_updated": candles[-1]["time"],
             "candles": candles[-200:],
+            "data_validation": data_validation,
+            "shared_indicators": shared_indicators,
+            "decision_context": decision_context,
             "ai_analysis": {
                 "status": "live", "market_bias": bias,
                 "direction": "UPWARD" if up_probability > 55 else "DOWNWARD" if up_probability < 45 else "SIDEWAYS",
