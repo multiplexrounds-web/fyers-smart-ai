@@ -203,7 +203,7 @@ export default function App(){
  const optionVerdictConfidence=optionVerdictReady?Math.round(Math.min(95,50+Math.abs(optionPcr-1)*25+(optionTrend==='BULLISH'||optionTrend==='BEARISH'?10:0))):null;
  const optionTrendStrength=aiReady&&Number.isFinite(Number(analysisIndicators.rsi14))?Math.round(Math.min(100,Math.abs(Number(analysisIndicators.rsi14)-50)*2)):null;
  const oiSignal=(row)=>{if(!row||row.oi_change===null||row.oi_change===undefined||!Number.isFinite(Number(row.oi_change)))return 'PENDING';const oi=Number(row.oi_change),ltp=Number(row.ltp),change=Number(row.change??row.ltp_change??row.price_change);if(!Number.isFinite(change))return oi>0?'OI BUILD-UP':'OI REDUCTION';if(oi>0&&change>0)return 'LONG BUILD-UP';if(oi>0&&change<0)return 'SHORT BUILD-UP';if(oi<0&&change>0)return 'SHORT COVERING';if(oi<0&&change<0)return 'LONG UNWINDING';return 'NEUTRAL';};
- const optionBreakout=aiReady?(centralDecision?.tool_contexts?.breakout_detection?.status||marketAnalysis?.ai_analysis?.breakout_status):null;
+ const optionBreakout=centralDecision?.tool_contexts?.breakout_detection?.status||'PENDING';
  const optionBullTrap=optionBreakout==='BREAKOUT'&&scalpCandles.length>=2&&Number(scalpLast?.close)<Number(scalpPrev?.high)?'POSSIBLE BULL TRAP':'NO CONFIRMED TRAP';
  const optionBearTrap=optionBreakout==='BREAKDOWN'&&scalpCandles.length>=2&&Number(scalpLast?.close)>Number(scalpPrev?.low)?'POSSIBLE BEAR TRAP':'NO CONFIRMED TRAP';
  const optionHistoryLatest=optionSignalHistory[0]||null;
