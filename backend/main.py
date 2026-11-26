@@ -63,6 +63,7 @@ def decision_context(payload: dict = Body(...)):
         payload.get("market_bias"),
         risk_score,
         payload.get("option_pcr"),
+        payload.get("tool_inputs") or {},
     )
 
 
