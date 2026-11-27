@@ -18,8 +18,27 @@ def build_decision_context(indicators, market_bias, risk_score, option_pcr=None,
     pcr = _number(option_pcr)
     valid_pcr = pcr is not None and pcr >= 0
     ready = risk is not None and 0 <= risk <= 100
+    confirmation = tools.get("option_chain_confirmation") or {}
+    call_oi = _number(confirmation.get("call_oi"))
+    put_oi = _number(confirmation.get("put_oi"))
+    call_iv = _number(confirmation.get("atm_call_iv"))
+    put_iv = _number(confirmation.get("atm_put_iv"))
+    oi_iv_ready = (
+        confirmation.get("ready") is True
+        and call_oi is not None and call_oi > 0
+        and put_oi is not None and put_oi > 0
+        and call_iv is not None and call_iv > 0
+        and put_iv is not None and put_iv > 0
+    )
+    oi_direction = (
+        "BEARISH" if call_oi > put_oi
+        else "BULLISH" if put_oi > call_oi
+        else "NEUTRAL"
+    ) if oi_iv_ready else "PENDING"
+    oi_iv_confirmed = oi_iv_ready and oi_direction == bias
+
     trade = "WAIT"
-    if ready and risk < 65 and valid_pcr:
+    if ready and risk < 65 and valid_pcr and oi_iv_confirmed:
         if bias == "BULLISH" and pcr >= 0.9:
             trade = "BUY CE"
         elif bias == "BEARISH" and pcr <= 1.1:
@@ -58,7 +77,7 @@ def build_decision_context(indicators, market_bias, risk_score, option_pcr=None,
     elif scalp_ready and scalp_type == "PE" and trade == "BUY PE" and bear_score is not None and bear_score >= 75:
         scalp_signal = "BUY PE"
 
-    option_verdict = "PENDING" if not valid_pcr else "BULLISH" if trade == "BUY CE" else "BEARISH" if trade == "BUY PE" else "SIDEWAYS"
+    option_verdict = "PENDING" if not (valid_pcr and oi_iv_ready) else "BULLISH" if oi_direction == "BULLISH" else "BEARISH" if oi_direction == "BEARISH" else "SIDEWAYS"
 
     return {
         "status": "ready" if ready else "pending",
@@ -76,7 +95,17 @@ def build_decision_context(indicators, market_bias, risk_score, option_pcr=None,
             "support_resistance": {"status": "ready" if support is not None and resistance is not None else "pending", "support": support, "resistance": resistance},
             "risk_meter": {"status": "ready" if ready else "pending", "score": round(risk, 2) if ready else None, "level": risk_level, "trend_stability": trend_stability, "momentum_score": momentum},
             "market_sentiment": {"status": "ready" if sentiment_ready else "pending", "label": sentiment, "advances": tools.get("sentiment_up"), "declines": tools.get("sentiment_down")},
-            "option_chain": {"status": "ready" if valid_pcr else "pending", "verdict": option_verdict, "pcr": pcr if valid_pcr else None},
+            "option_chain": {
+                "status": "ready" if valid_pcr and oi_iv_ready else "pending",
+                "verdict": option_verdict,
+                "pcr": pcr if valid_pcr else None,
+                "oi_iv_confirmation": "CONFIRMED" if oi_iv_confirmed else "CONFLICT" if oi_iv_ready else "PENDING",
+                "oi_direction": oi_direction,
+                "call_oi": call_oi,
+                "put_oi": put_oi,
+                "atm_call_iv": call_iv,
+                "atm_put_iv": put_iv,
+            },
             "smart_scalping": {"status": "ready" if scalp_ready else "pending", "signal": scalp_signal, "score": bull_score if scalp_type == "CE" else bear_score, "contract_type": scalp_type if scalp_type in {"CE", "PE"} else None},
         },
         "note": "Rule-based central context; existing feature calculations are retained and this is not a calibrated prediction or guarantee of profit.",
