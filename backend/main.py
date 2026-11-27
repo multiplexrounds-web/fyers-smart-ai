@@ -9,6 +9,7 @@ from fyers_apiv3 import fyersModel
 from data_validation import validate_candles
 from indicators import calculate_indicators
 from decision_engine import build_decision_context
+from fyers_stream import create_stream_router
 
 app = FastAPI(title="FYERS SMART AI - Read Only")
 
@@ -18,6 +19,9 @@ _oauth_state: Optional[str] = None
 _oauth_state_created_at: Optional[float] = None
 _access_token: Optional[str] = None
 _token_created_at: Optional[float] = None
+
+# Additive WebSocket route; existing REST market-data routes remain unchanged.
+app.include_router(create_stream_router(lambda: (os.getenv("FYERS_APP_ID", "").strip(), _access_token)))
 
 
 def _config():
