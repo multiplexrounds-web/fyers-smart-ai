@@ -471,7 +471,7 @@ export default function App(){
  <Card title="OPTION PREMIUM TARGET / STOP LOSS">
   <Row label="Option entry" value={showMetric(scalpPremiumEntry)}/>
   <Row label="Premium target (+30%)" value={scalpPremiumTarget===null?'--':showMetric(scalpPremiumTarget)}/>
-  <Row label="Premium stop loss (-20%)" value={scalpPremiumStop===null?'--':showMetric(scalpPremiumStop)}/
+  <Row label="Premium stop loss (-20%)" value={scalpPremiumStop===null?'--':showMetric(scalpPremiumStop)}/>
  </Card>
  <Card title="TECHNICAL + OPTION GREEKS">
   <Row label="EMA 20 / EMA 50" value={showMetric(analysisIndicators.ema20)+' / '+showMetric(analysisIndicators.ema50)}/>
