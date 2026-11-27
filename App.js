@@ -230,23 +230,45 @@ export default function App(){
  const scalpPrev=scalpCandles[scalpCandles.length-2]||null;
  const scalpSpot=Number(scalpLast?.close);
  const scalpRelVolume=scalpCandles.length>=21&&Number(scalpLast?.volume)>0?(Number(scalpLast.volume)/(scalpCandles.slice(-21,-1).reduce((sum,c)=>sum+Number(c.volume||0),0)/20||1)):null;
- const scalpTrendUp=Number(analysisIndicators.ema20)>Number(analysisIndicators.ema50)&&Number(analysisIndicators.rsi14)>=55&&Number(analysisIndicators.macd)>Number(analysisIndicators.macd_signal)&&Number(analysisIndicators.vwap)>0&&scalpSpot>=Number(analysisIndicators.vwap);
- const scalpTrendDown=Number(analysisIndicators.ema20)<Number(analysisIndicators.ema50)&&Number(analysisIndicators.rsi14)<=45&&Number(analysisIndicators.macd)<Number(analysisIndicators.macd_signal)&&Number(analysisIndicators.vwap)>0&&scalpSpot<=Number(analysisIndicators.vwap);
- const scalpPriceUp=!!(scalpLast&&scalpPrev&&scalpLast.close>scalpPrev.close&&aiAnalysis.breakout_status==='BREAKOUT');
- const scalpPriceDown=!!(scalpLast&&scalpPrev&&scalpLast.close<scalpPrev.close&&aiAnalysis.breakout_status==='BREAKDOWN');
+ const scalpTrendUp=Number(analysisIndicators.ema20)>Number(analysisIndicators.ema50)&&Number(analysisIndicators.rsi14)>=52&&Number(analysisIndicators.macd)>Number(analysisIndicators.macd_signal)&&Number(analysisIndicators.vwap)>0&&scalpSpot>=Number(analysisIndicators.vwap);
+ const scalpTrendDown=Number(analysisIndicators.ema20)<Number(analysisIndicators.ema50)&&Number(analysisIndicators.rsi14)<=48&&Number(analysisIndicators.macd)<Number(analysisIndicators.macd_signal)&&Number(analysisIndicators.vwap)>0&&scalpSpot<=Number(analysisIndicators.vwap);
  const scalpOiReady=scalpContract?.oi!==null&&scalpContract?.oi!==undefined&&scalpContract?.oi_change!==null&&scalpContract?.oi_change!==undefined;
  const scalpVolumeReady=Number(scalpContract?.volume)>0&&scalpRelVolume!==null&&scalpRelVolume>=1;
- const scalpDataReady=aiReady&&optionChainStatus==='live'&&!!scalpContract&&Number(scalpContract.ltp)>0&&scalpOiReady&&scalpVolumeReady&&scalpGreeks&&Number.isFinite(scalpSpot)&&scalpSpot>0&&riskScore!==null;
- const scalpBullScore=(scalpTrendUp?25:0)+(scalpPriceUp?15:0)+(scalpOiReady&&Number(scalpContract?.oi_change)>0&&scalpType==='CE'?20:0)+(scalpGreeks&&Number(scalpContract?.delta)>0.35?15:0)+(scalpVolumeReady?15:0)+(riskScore!==null&&riskScore<35?10:riskScore!==null&&riskScore<65?5:0);
- const scalpBearScore=(scalpTrendDown?25:0)+(scalpPriceDown?15:0)+(scalpOiReady&&Number(scalpContract?.oi_change)>0&&scalpType==='PE'?20:0)+(scalpGreeks&&Number(scalpContract?.delta)<-0.35?15:0)+(scalpVolumeReady?15:0)+(riskScore!==null&&riskScore<35?10:riskScore!==null&&riskScore<65?5:0);
- const scalpSignal=!scalpDataReady||centralDecision?.status!=='ready'?'WAIT':(centralDecision.tool_contexts?.smart_scalping?.signal||'WAIT');
- const scalpScore=scalpType==='CE'?scalpBullScore:scalpBearScore;
- const scalpSignalReason=!scalpDataReady?'Waiting for live candles, selected contract, OI, IV, all four Greeks and volume confirmation.':riskScore>=65?'Market risk is too high.':scalpSignal==='BUY CE'?'Bullish trend, breakout, CE OI, positive delta and volume conditions aligned.':scalpSignal==='BUY PE'?'Bearish trend, breakdown, PE OI, negative delta and volume conditions aligned.':'Required confirmations are not aligned; remain on WAIT.';
- const scalpIndexTarget=scalpSpot>0?(scalpSignal==='BUY CE'?scalpSpot+25:scalpSignal==='BUY PE'?scalpSpot-25:null):null;
- const scalpIndexStop=scalpSpot>0?(scalpSignal==='BUY CE'?scalpSpot-12.5:scalpSignal==='BUY PE'?scalpSpot+12.5:null):null;
+ const scalpCandleBull=!!(scalpLast&&Number(scalpLast.close)>Number(scalpLast.open));
+ const scalpCandleBear=!!(scalpLast&&Number(scalpLast.close)<Number(scalpLast.open));
+ const scalpRecent=scalpCandles.slice(-11,-1);
+ const scalpRecentHigh=scalpRecent.length?Math.max(...scalpRecent.map(x=>Number(x.high)||0)):null;
+ const scalpRecentLow=scalpRecent.length?Math.min(...scalpRecent.map(x=>Number(x.low)||Infinity)):null;
+ const scalpBreakoutUp=scalpRecentHigh!==null&&scalpSpot>scalpRecentHigh&&scalpRelVolume!==null&&scalpRelVolume>=1.2&&scalpCandleBull;
+ const scalpBreakoutDown=scalpRecentLow!==null&&scalpSpot<scalpRecentLow&&scalpRelVolume!==null&&scalpRelVolume>=1.2&&scalpCandleBear;
+ const scalpRsi=Number(analysisIndicators.rsi14);
+ const scalpVwap=Number(analysisIndicators.vwap);
+ const scalpVwapReclaimUp=!!(scalpPrev&&Number(scalpPrev.close)<=scalpVwap&&scalpSpot>scalpVwap&&scalpRsi>50&&scalpCandleBull);
+ const scalpVwapReclaimDown=!!(scalpPrev&&Number(scalpPrev.close)>=scalpVwap&&scalpSpot<scalpVwap&&scalpRsi<50&&scalpCandleBear);
+ const scalpRangeLow=scalpRecentLow>0&&scalpSpot<=scalpRecentLow*1.0025&&scalpRsi<=35&&scalpCandleBull;
+ const scalpRangeHigh=scalpRecentHigh>0&&scalpSpot>=scalpRecentHigh*0.9975&&scalpRsi>=65&&scalpCandleBear;
+ const scalpTrueRanges=scalpCandles.slice(-15).map((x,i,a)=>{const prev=a[i-1];const h=Number(x.high),l=Number(x.low),pc=prev?Number(prev.close):Number(x.close);return Math.max(0,h-l,Math.abs(h-pc),Math.abs(l-pc));}).filter(Number.isFinite);
+ const scalpAtr=scalpTrueRanges.length?scalpTrueRanges.reduce((a,b)=>a+b,0)/scalpTrueRanges.length:null;
+ const scalpBullSetups=[scalpTrendUp?'EMA/VWAP Momentum':null,scalpBreakoutUp?'Volume Breakout':null,scalpVwapReclaimUp?'VWAP Reclaim':null,scalpRangeLow?'Range Reversal':null].filter(Boolean);
+ const scalpBearSetups=[scalpTrendDown?'EMA/VWAP Momentum':null,scalpBreakoutDown?'Volume Breakdown':null,scalpVwapReclaimDown?'VWAP Reclaim':null,scalpRangeHigh?'Range Reversal':null].filter(Boolean);
+ const scalpDirection=scalpBullSetups.length>scalpBearSetups.length?'BULLISH':scalpBearSetups.length>scalpBullSetups.length?'BEARISH':'NEUTRAL';
+ const scalpSelectedStrategy=scalpDirection==='BULLISH'?scalpBullSetups[0]||'No setup':scalpDirection==='BEARISH'?scalpBearSetups[0]||'No setup':'No confirmed setup';
+ const scalpMarketCondition=scalpTrendUp?'Bullish Trend':scalpTrendDown?'Bearish Trend':scalpBreakoutUp?'Bullish Breakout':scalpBreakoutDown?'Bearish Breakout':scalpRangeLow||scalpRangeHigh?'Range Reversal':'Sideways / Unclear';
+ const scalpOiConfirmation=scalpOiReady&&Number(scalpContract?.oi_change)>0;
+ const scalpGreekConfirmation=scalpGreeks&&(scalpDirection==='BULLISH'?Number(scalpContract?.delta)>0.35:scalpDirection==='BEARISH'?Number(scalpContract?.delta)<-0.35:false);
+ const scalpScore=Math.min(100,(scalpDirection==='BULLISH'?scalpBullSetups.length:scalpDirection==='BEARISH'?scalpBearSetups.length:0)*20+(scalpVolumeReady?15:0)+(scalpOiConfirmation?10:0)+(scalpGreekConfirmation?15:0)+(riskScore!==null&&riskScore<35?10:riskScore!==null&&riskScore<65?5:0));
+ const scalpBullScore=scalpDirection==='BULLISH'?scalpScore:0;
+ const scalpBearScore=scalpDirection==='BEARISH'?scalpScore:0;
+ const scalpDataReady=aiReady&&optionChainStatus==='live'&&!!scalpContract&&Number(scalpContract.ltp)>0&&scalpOiReady&&scalpVolumeReady&&scalpGreeks&&Number.isFinite(scalpSpot)&&scalpSpot>0&&riskScore!==null&&riskScore<65&&scalpAtr!==null&&scalpAtr>0;
+ const scalpDesiredType=scalpDirection==='BULLISH'?'CE':scalpDirection==='BEARISH'?'PE':null;
+ const scalpSignal=!scalpDataReady||!scalpDesiredType||scalpDesiredType!==scalpType||scalpScore<60?'WAIT':scalpDesiredType==='CE'?'BUY CE':'BUY PE';
+ const scalpSignalReason=!scalpDataReady?(riskScore!==null&&riskScore>=65?'Market risk is too high.':'Waiting for valid live candles, selected option, OI, Greeks, volume and ATR data.'):!scalpDesiredType?'No clear market direction; wait for a confirmed setup.':scalpDesiredType!==scalpType?'AI detected '+scalpDesiredType+' setup. Select the matching option side.':scalpScore<60?'Setup confirmation is below the required threshold.':scalpSignal==='BUY CE'?'Adaptive strategy '+scalpSelectedStrategy+' confirmed bullish momentum and option conditions.':'Adaptive strategy '+scalpSelectedStrategy+' confirmed bearish momentum and option conditions.';
+ const scalpIndexEntry=scalpSpot>0?scalpSpot:null;
+ const scalpIndexStop=scalpSignal==='BUY CE'?scalpSpot-scalpAtr:scalpSignal==='BUY PE'?scalpSpot+scalpAtr:null;
+ const scalpIndexTarget=scalpSignal==='BUY CE'?scalpSpot+scalpAtr*1.5:scalpSignal==='BUY PE'?scalpSpot-scalpAtr*1.5:null;
  const scalpPremiumEntry=Number(scalpContract?.ltp)>0?Number(scalpContract.ltp):null;
- const scalpPremiumTarget=scalpPremiumEntry!==null&&scalpSignal!=='WAIT'?scalpPremiumEntry+25:null;
- const scalpPremiumStop=scalpPremiumEntry!==null&&scalpSignal!=='WAIT'?Math.max(0,scalpPremiumEntry-12.5):null;
+ const scalpPremiumStop=scalpPremiumEntry!==null&&scalpSignal!=='WAIT'?Math.max(0,scalpPremiumEntry*0.8):null;
+ const scalpPremiumTarget=scalpPremiumEntry!==null&&scalpSignal!=='WAIT'?scalpPremiumEntry*1.3:null;
  const riskCandles=marketAnalysis?.candles||[];
  const currentPrice=Number(riskCandles[riskCandles.length-1]?.close);
  const emaSpread=Number.isFinite(currentPrice)&&currentPrice>0&&Number.isFinite(Number(analysisIndicators.ema20))&&Number.isFinite(Number(analysisIndicators.ema50))?Math.abs(Number(analysisIndicators.ema20)-Number(analysisIndicators.ema50))/currentPrice*100:null;
@@ -436,20 +458,20 @@ export default function App(){
  <Card title="AI SMART DECISION" extra={<AppText style={scalpDataReady?s.green:s.accent}>{scalpDataReady?'LIVE INPUTS':'WAITING FOR DATA'}</AppText>}>
   <AppText style={{fontSize:27,fontWeight:'900',color:scalpSignal==='BUY CE'?green:scalpSignal==='BUY PE'?'#F06B72':accent,textAlign:'center',paddingVertical:12}}>{scalpSignal}</AppText>
   <Row label="Selected contract" value={scalpContract?optionFmt(scalpContract.strike_price)+' '+scalpType:'--'}/>
-  <Row label="Rule score (not win probability)" value={scalpDataReady?scalpScore+'/100':'--'}/>
+  <Row label="Adaptive confirmation score (not win probability)" value={scalpDataReady?scalpScore+'/100':'--'}/><Row label="Market condition" value={scalpMarketCondition}/><Row label="Selected strategy" value={scalpSelectedStrategy}/><Row label="Other confirmations" value={(scalpDirection==='BULLISH'?scalpBullSetups:scalpBearSetups).join(', ')||'None'}/>
   <Row label="Market sentiment" value={aiReady?aiValue(aiAnalysis.market_bias):'WAITING'}/>
   <Row label="Risk" value={riskScore===null?'--':riskScore+'/100 • '+riskLevel}/>
   <Row label="Reason" value={scalpSignalReason}/>
  </Card>
- <Card title="INDEX TARGET / STOP LOSS">
-  <Row label="Index entry" value={showMetric(scalpSpot)}/>
-  <Row label="Index target (25 points)" value={scalpIndexTarget===null?'--':showMetric(scalpIndexTarget)}/>
-  <Row label="Index stop loss (12.5 points)" value={scalpIndexStop===null?'--':showMetric(scalpIndexStop)}/>
+ <Card title="ADAPTIVE INDEX ENTRY / RISK LEVELS">
+  <Row label="Index entry" value={showMetric(scalpIndexEntry)}/>
+  <Row label="ATR-based target (1.5R)" value={scalpIndexTarget===null?'--':showMetric(scalpIndexTarget)}/>
+  <Row label="ATR-based stop loss (1R)" value={scalpIndexStop===null?'--':showMetric(scalpIndexStop)}/>
  </Card>
  <Card title="OPTION PREMIUM TARGET / STOP LOSS">
   <Row label="Option entry" value={showMetric(scalpPremiumEntry)}/>
-  <Row label="Premium target (+25)" value={scalpPremiumTarget===null?'--':showMetric(scalpPremiumTarget)}/>
-  <Row label="Premium stop loss (-12.5)" value={scalpPremiumStop===null?'--':showMetric(scalpPremiumStop)}/>
+  <Row label="Premium target (+30%)" value={scalpPremiumTarget===null?'--':showMetric(scalpPremiumTarget)}/>
+  <Row label="Premium stop loss (-20%)" value={scalpPremiumStop===null?'--':showMetric(scalpPremiumStop)}/
  </Card>
  <Card title="TECHNICAL + OPTION GREEKS">
   <Row label="EMA 20 / EMA 50" value={showMetric(analysisIndicators.ema20)+' / '+showMetric(analysisIndicators.ema50)}/>
